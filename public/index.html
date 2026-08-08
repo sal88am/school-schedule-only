@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>سِجِلّ — نظام إدارة الحصص</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- شاشة الدخول -->
+<div id="loginScreen" class="login-screen">
+  <div class="login-card">
+    <div class="brand">
+      <span class="brand-mark">سِ</span>
+      <div>
+        <h1>سِجِلّ</h1>
+        <p>نظام إدارة الحصص الدراسية</p>
+      </div>
+    </div>
+    <label for="pwInput">كلمة مرور الإدارة</label>
+    <input id="pwInput" type="password" placeholder="••••••••" />
+    <button id="loginBtn" class="btn btn-primary">دخول</button>
+    <p id="loginError" class="error-text"></p>
+  </div>
+</div>
+
+<!-- التطبيق -->
+<div id="app" class="app hidden">
+  <aside class="sidebar">
+    <div class="brand brand-sm">
+      <span class="brand-mark">سِ</span>
+      <div><h1>سِجِلّ</h1></div>
+    </div>
+    <nav>
+      <button class="nav-link active" data-view="dashboard">📋 نظرة عامة</button>
+      <button class="nav-link" data-view="teachers">👤 الكادر التدريسي</button>
+      <button class="nav-link" data-view="subjects">📚 المواد الدراسية</button>
+      <button class="nav-link" data-view="classes">🏫 الصفوف والشعب</button>
+      <button class="nav-link" data-view="periodTimes">🕐 توقيت الحصص</button>
+      <button class="nav-link" data-view="schedule">🗓️ الجدول الدراسي</button>
+      <button class="nav-link" data-view="settings">⚙️ الإعدادات</button>
+    </nav>
+  </aside>
+
+  <main class="content">
+
+    <!-- نظرة عامة -->
+    <section id="view-dashboard" class="view active">
+      <header class="view-header">
+        <h2>نظرة عامة</h2>
+        <p>ملخص سريع عن المدرسة</p>
+      </header>
+      <div class="stat-grid" id="statGrid"></div>
+      <div class="card">
+        <h3>جدول اليوم</h3>
+        <div id="todaySchedule" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <!-- المعلمون -->
+    <section id="view-teachers" class="view">
+      <header class="view-header">
+        <h2>الكادر التدريسي</h2>
+        <p>التخصص لازم يطابق بالضبط اسم إحدى المواد الدراسية عشان يشتغل التوليد التلقائي للجدول</p>
+      </header>
+
+      <div class="card">
+        <h3>إضافة معلم جديد</h3>
+        <form id="teacherForm" class="form-row">
+          <input name="name" placeholder="الاسم الكامل" required />
+          <input name="phone" placeholder="رقم الهاتف (اختياري)" />
+          <select name="specialty" id="teacherSpecialtySelect">
+            <option value="">اختر التخصص (مادة)</option>
+          </select>
+          <button class="btn btn-accent" type="submit">إضافة</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h3>قائمة المعلمين</h3>
+        <div id="teachersTable" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <!-- المواد -->
+    <section id="view-subjects" class="view">
+      <header class="view-header">
+        <h2>المواد الدراسية</h2>
+        <p>أضف كل المواد أولاً — بعدها تقدر تربط كل معلم بمادته من صفحة الكادر التدريسي</p>
+      </header>
+
+      <div class="card">
+        <form id="subjectForm" class="form-row">
+          <input name="name" placeholder="اسم المادة (مثال: الرياضيات)" required />
+          <button class="btn btn-accent" type="submit">إضافة</button>
+        </form>
+        <div id="subjectsTable" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <!-- الصفوف والشعب -->
+    <section id="view-classes" class="view">
+      <header class="view-header">
+        <h2>الصفوف والشعب</h2>
+        <p>اختر المرحلة، وحدد عدد الشعب — راح تتولد أسماء الشعب تلقائياً بالحروف الأبجدية (أ، ب، ج...)</p>
+      </header>
+
+      <div class="card">
+        <h3>توليد صف دراسي</h3>
+        <form id="classGenForm" class="form-row">
+          <select name="grade" required>
+            <option value="الأول">الأول</option>
+            <option value="الثاني">الثاني</option>
+            <option value="الثالث">الثالث</option>
+            <option value="الرابع">الرابع</option>
+            <option value="الخامس">الخامس</option>
+            <option value="السادس">السادس</option>
+          </select>
+          <input name="sections_count" type="number" min="1" max="20" placeholder="عدد الشعب" required />
+          <input name="periods_per_day" type="number" min="1" max="12" placeholder="عدد الحصص باليوم" required />
+          <button class="btn btn-accent" type="submit">توليد الشعب</button>
+        </form>
+        <p id="classGenError" class="error-text"></p>
+      </div>
+
+      <div class="card">
+        <h3>الصفوف الحالية</h3>
+        <div id="classesTable" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <!-- توقيت الحصص -->
+    <section id="view-periodTimes" class="view">
+      <header class="view-header">
+        <h2>توقيت الحصص</h2>
+        <p>توقيت موحّد لكل رقم حصة، يتكرر نفسه كل يوم دوام</p>
+      </header>
+
+      <div class="card">
+        <h3>إضافة / تعديل توقيت حصة</h3>
+        <form id="periodTimeForm" class="form-row">
+          <input name="period_number" type="number" min="1" placeholder="رقم الحصة" required />
+          <select name="day_of_week">
+            <option value="all">كل أيام الدوام</option>
+            <option value="0">الأحد فقط</option>
+            <option value="1">الاثنين فقط</option>
+            <option value="2">الثلاثاء فقط</option>
+            <option value="3">الأربعاء فقط</option>
+            <option value="4">الخميس فقط</option>
+            <option value="5">الجمعة فقط</option>
+            <option value="6">السبت فقط</option>
+          </select>
+          <input name="start_time" type="time" required />
+          <input name="end_time" type="time" required />
+          <button class="btn btn-accent" type="submit">حفظ</button>
+        </form>
+        <p class="muted-text">اختر "كل أيام الدوام" لتوقيت موحّد، أو يوم محدد إذا هذا اليوم بس يختلف توقيته عن باقي الأيام.</p>
+      </div>
+
+      <div class="card">
+        <h3>الحصص المعرّفة</h3>
+        <div id="periodTimesTable" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <!-- الجدول الدراسي -->
+    <section id="view-schedule" class="view">
+      <header class="view-header">
+        <h2>الجدول الدراسي</h2>
+        <p>ولّد الجدول تلقائياً، وعدّل عليه يدوياً إذا احتجت</p>
+      </header>
+
+      <div class="card">
+        <h3>توليد تلقائي</h3>
+        <p class="muted-text">يستبدل الجدول الحالي بالكامل ويوزع المعلمين على الصفوف تلقائياً حسب تخصص كل معلم.</p>
+        <button class="btn btn-primary" id="autoGenBtn">⚡ توليد الجدول تلقائياً</button>
+        <p id="autoGenResult" class="muted-text"></p>
+      </div>
+
+      <div class="card">
+        <h3>إضافة/تعديل حصة يدوياً</h3>
+        <form id="scheduleForm" class="form-row">
+          <select name="teacher_id" required></select>
+          <select name="class_id" required></select>
+          <select name="subject_id" required></select>
+          <select name="day_of_week" required>
+            <option value="0">الأحد</option>
+            <option value="1">الاثنين</option>
+            <option value="2">الثلاثاء</option>
+            <option value="3">الأربعاء</option>
+            <option value="4">الخميس</option>
+            <option value="5">الجمعة</option>
+            <option value="6">السبت</option>
+          </select>
+          <input name="period_number" type="number" min="1" placeholder="رقم الحصة" required />
+          <button class="btn btn-accent" type="submit">تعيين</button>
+        </form>
+        <p id="scheduleError" class="error-text"></p>
+      </div>
+
+      <div class="card">
+        <div class="schedule-toolbar">
+          <h3>عرض الجدول</h3>
+          <div class="schedule-controls">
+            <select id="scheduleFilterType">
+              <option value="all">الجدول الكامل</option>
+              <option value="class">صف معيّن</option>
+              <option value="teacher">معلم معيّن</option>
+            </select>
+            <select id="scheduleFilterValue" class="hidden"></select>
+            <button class="btn btn-ghost" id="printBtn">🖨️ طباعة</button>
+            <button class="btn btn-ghost" id="shareBtn">🔗 نسخ رابط المشاركة</button>
+          </div>
+        </div>
+        <p id="shareResult" class="muted-text"></p>
+        <div id="scheduleGrid" class="timetable-wrap"></div>
+      </div>
+    </section>
+
+    <!-- الإعدادات -->
+    <section id="view-settings" class="view">
+      <header class="view-header">
+        <h2>الإعدادات</h2>
+        <p>معلومات المدرسة وأيام الدوام</p>
+      </header>
+
+      <div class="card">
+        <h3>اسم المدرسة وشعارها</h3>
+        <p class="muted-text">تظهر بأعلى صفحة مشاركة/طباعة الجدول</p>
+        <form id="schoolInfoForm" class="form-col">
+          <input name="school_name" placeholder="اسم المدرسة" />
+          <input name="school_logo" type="file" accept="image/*" />
+          <div id="logoPreviewWrap" class="hidden">
+            <img id="logoPreview" alt="الشعار" />
+            <button type="button" class="btn btn-ghost" id="removeLogoBtn">إزالة الشعار</button>
+          </div>
+          <button class="btn btn-accent" type="submit">حفظ</button>
+        </form>
+        <p id="schoolInfoResult" class="muted-text"></p>
+      </div>
+
+      <div class="card">
+        <h3>أيام الدوام</h3>
+        <form id="workingDaysForm" class="form-row">
+          <label class="checkbox-label"><input type="checkbox" value="0" /> الأحد</label>
+          <label class="checkbox-label"><input type="checkbox" value="1" /> الاثنين</label>
+          <label class="checkbox-label"><input type="checkbox" value="2" /> الثلاثاء</label>
+          <label class="checkbox-label"><input type="checkbox" value="3" /> الأربعاء</label>
+          <label class="checkbox-label"><input type="checkbox" value="4" /> الخميس</label>
+          <label class="checkbox-label"><input type="checkbox" value="5" /> الجمعة</label>
+          <label class="checkbox-label"><input type="checkbox" value="6" /> السبت</label>
+          <button class="btn btn-accent" type="submit">حفظ</button>
+        </form>
+        <p id="workingDaysResult" class="muted-text"></p>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
