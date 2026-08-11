@@ -64,18 +64,22 @@
     <section id="view-teachers" class="view">
       <header class="view-header">
         <h2>الكادر التدريسي</h2>
-        <p>التخصص لازم يطابق بالضبط اسم إحدى المواد الدراسية عشان يشتغل التوليد التلقائي للجدول</p>
+        <p>معلم واحد يقدر يدرّس أكثر من مادة — اختر كل المواد اللي يدرّسها</p>
       </header>
 
       <div class="card">
-        <h3>إضافة معلم جديد</h3>
-        <form id="teacherForm" class="form-row">
-          <input name="name" placeholder="الاسم الكامل" required />
-          <input name="phone" placeholder="رقم الهاتف (اختياري)" />
-          <select name="specialty" id="teacherSpecialtySelect">
-            <option value="">اختر التخصص (مادة)</option>
-          </select>
-          <button class="btn btn-accent" type="submit">إضافة</button>
+        <h3 id="teacherFormTitle">إضافة معلم جديد</h3>
+        <form id="teacherForm" class="form-col">
+          <div class="form-row">
+            <input name="name" placeholder="الاسم الكامل" required />
+            <input name="phone" placeholder="رقم الهاتف (اختياري)" />
+          </div>
+          <label class="field-label">المواد التي يدرّسها</label>
+          <div id="teacherSubjectsCheckboxes" class="checkbox-grid"></div>
+          <div class="form-row">
+            <button class="btn btn-accent" type="submit" id="teacherSubmitBtn">إضافة</button>
+            <button class="btn btn-ghost hidden" type="button" id="teacherCancelEditBtn">إلغاء التعديل</button>
+          </div>
         </form>
       </div>
 

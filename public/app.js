@@ -67,7 +67,7 @@ document.querySelectorAll(".nav-link").forEach((btn) => {
 
 function refreshView(view) {
   if (view === "dashboard") loadDashboard();
-  if (view === "teachers") { loadSpecialtyOptions(); loadTeachers(); }
+  if (view === "teachers") { loadTeacherSubjectCheckboxes(); loadTeachers(); }
   if (view === "subjects") loadSubjects();
   if (view === "classes") loadClasses();
   if (view === "periodTimes") loadPeriodTimes();
@@ -124,22 +124,63 @@ function statCard(num, label) {
 }
 
 // ---------- المعلمون ----------
-async function loadSpecialtyOptions() {
+let editingTeacherId = null;
+
+async function loadTeacherSubjectCheckboxes(checkedIds = []) {
   const subjects = await apiFetch("/api/subjects");
-  const select = document.getElementById("teacherSpecialtySelect");
-  select.innerHTML =
-    `<option value="">اختر التخصص (مادة)</option>` +
-    subjects.map((s) => `<option value="${s.name}">${s.name}</option>`).join("");
+  const container = document.getElementById("teacherSubjectsCheckboxes");
+  container.innerHTML = subjects
+    .map(
+      (s) => `<label class="checkbox-label">
+        <input type="checkbox" name="subject_ids" value="${s.id}" ${checkedIds.includes(s.id) ? "checked" : ""} />
+        ${s.name}
+      </label>`
+    )
+    .join("") || '<span class="muted-text">أضف مواد أولاً من صفحة "المواد الدراسية"</span>';
 }
 
 document.getElementById("teacherForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
-  const payload = Object.fromEntries(fd.entries());
-  await apiFetch("/api/teachers", { method: "POST", body: JSON.stringify(payload) });
-  e.target.reset();
+  const subjectIds = [...document.querySelectorAll('#teacherSubjectsCheckboxes input:checked')].map((cb) =>
+    Number(cb.value)
+  );
+  const payload = { name: fd.get("name"), phone: fd.get("phone"), subject_ids: subjectIds };
+
+  if (editingTeacherId) {
+    await apiFetch(`/api/teachers/${editingTeacherId}`, { method: "PUT", body: JSON.stringify(payload) });
+  } else {
+    await apiFetch("/api/teachers", { method: "POST", body: JSON.stringify(payload) });
+  }
+  resetTeacherForm();
   loadTeachers();
 });
+
+document.getElementById("teacherCancelEditBtn").addEventListener("click", resetTeacherForm);
+
+function resetTeacherForm() {
+  editingTeacherId = null;
+  document.getElementById("teacherForm").reset();
+  document.getElementById("teacherFormTitle").textContent = "إضافة معلم جديد";
+  document.getElementById("teacherSubmitBtn").textContent = "إضافة";
+  document.getElementById("teacherCancelEditBtn").classList.add("hidden");
+  loadTeacherSubjectCheckboxes();
+}
+
+async function editTeacher(id) {
+  const teachers = await apiFetch("/api/teachers");
+  const teacher = teachers.find((t) => t.id === id);
+  if (!teacher) return;
+
+  editingTeacherId = id;
+  document.getElementById("teacherForm").name.value = teacher.name;
+  document.getElementById("teacherForm").phone.value = teacher.phone || "";
+  await loadTeacherSubjectCheckboxes(teacher.subjects.map((s) => s.id));
+  document.getElementById("teacherFormTitle").textContent = `تعديل: ${teacher.name}`;
+  document.getElementById("teacherSubmitBtn").textContent = "حفظ التعديل";
+  document.getElementById("teacherCancelEditBtn").classList.remove("hidden");
+  document.getElementById("teacherForm").scrollIntoView({ behavior: "smooth" });
+}
 
 async function loadTeachers() {
   const teachers = await apiFetch("/api/teachers");
@@ -148,22 +189,26 @@ async function loadTeachers() {
       (t) => `
     <tr>
       <td>${t.name}</td>
-      <td>${t.specialty || "—"}</td>
+      <td>${t.subjects.length ? t.subjects.map((s) => s.name).join("، ") : "—"}</td>
       <td>${t.phone || "—"}</td>
-      <td><button class="btn btn-danger" onclick="deleteTeacher(${t.id})">حذف</button></td>
+      <td>
+        <button class="btn btn-ghost" onclick="editTeacher(${t.id})">تعديل</button>
+        <button class="btn btn-danger" onclick="deleteTeacher(${t.id})">حذف</button>
+      </td>
     </tr>`
     )
     .join("");
 
   document.getElementById("teachersTable").innerHTML = `
     <table>
-      <thead><tr><th>الاسم</th><th>التخصص</th><th>الهاتف</th><th></th></tr></thead>
+      <thead><tr><th>الاسم</th><th>المواد</th><th>الهاتف</th><th></th></tr></thead>
       <tbody>${rows || emptyRow(4)}</tbody>
     </table>`;
 }
 
 async function deleteTeacher(id) {
   if (!confirm("حذف هذا المعلم؟ راح ينحذف من جدوله أيضاً.")) return;
+  if (editingTeacherId === id) resetTeacherForm();
   await apiFetch(`/api/teachers/${id}`, { method: "DELETE" });
   loadTeachers();
 }

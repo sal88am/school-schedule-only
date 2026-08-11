@@ -89,23 +89,27 @@ router.post("/auto-generate", (req, res) => {
   const workingDays = getWorkingDays().slice().sort((a, b) => a - b);
   const classes = db.prepare("SELECT * FROM school_classes ORDER BY id").all();
   const subjects = db.prepare("SELECT * FROM subjects ORDER BY id").all();
-  const teachers = db.prepare("SELECT * FROM teachers ORDER BY id").all();
 
   if (classes.length === 0) {
     return res.status(400).json({ error: "ضيف الصفوف أولاً (من صفحة الصفوف والشعب)" });
   }
 
+  // كل مادة → قائمة المعلمين اللي يقدرون يدرّسونها (معلم واحد يقدر يظهر تحت أكثر من مادة)
+  const teacherSubjectRows = db
+    .prepare(
+      `SELECT ts.teacher_id, ts.subject_id FROM teacher_subjects ts
+       JOIN teachers t ON t.id = ts.teacher_id`
+    )
+    .all();
   const teachersBySubject = {};
   subjects.forEach((s) => {
-    teachersBySubject[s.id] = teachers
-      .filter((t) => (t.specialty || "").trim() === s.name.trim())
-      .map((t) => t.id);
+    teachersBySubject[s.id] = teacherSubjectRows.filter((r) => r.subject_id === s.id).map((r) => r.teacher_id);
   });
   const usableSubjects = subjects.filter((s) => teachersBySubject[s.id].length > 0);
 
   if (usableSubjects.length === 0) {
     return res.status(400).json({
-      error: "ما فيه أي معلم مرتبط بمادة — تأكد إن حقل (التخصص) لكل معلم يطابق بالضبط اسم مادة موجودة",
+      error: "ما فيه أي معلم مرتبط بمادة — أضف مادة واحدة على الأقل لكل معلم من صفحة الكادر التدريسي",
     });
   }
 
