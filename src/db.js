@@ -21,6 +21,13 @@ CREATE TABLE IF NOT EXISTS subjects (
   name TEXT NOT NULL UNIQUE
 );
 
+-- علاقة متعددة: معلم واحد يقدر يدرّس أكثر من مادة (وبالتالي أكثر من مرحلة تلقائياً بالتوليد)
+CREATE TABLE IF NOT EXISTS teacher_subjects (
+  teacher_id INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+  subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+  PRIMARY KEY (teacher_id, subject_id)
+);
+
 -- الصف = مرحلة (الأول..السادس) + شعبة (أ، ب، ج...) تتولد تلقائياً
 CREATE TABLE IF NOT EXISTS school_classes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,14 +64,6 @@ CREATE TABLE IF NOT EXISTS schedule (
 );
 `);
 
-// القيمة الافتراضية لأيام الدوام (الأحد-الخميس) إذا ما محددة
-const existingDays = db.prepare("SELECT value FROM settings WHERE key = 'working_days'").get();
-if (!existingDays) {
-  db.prepare("INSERT INTO settings (key, value) VALUES ('working_days', ?)").run(
-    JSON.stringify([0, 1, 2, 3, 4])
-  );
-}
-
 // مواد افتراضية تُضاف تلقائياً أول مرة فقط (المستخدم يقدر يحذفها أو يضيف غيرها)
 const subjectCount = db.prepare("SELECT COUNT(*) AS n FROM subjects").get().n;
 if (subjectCount === 0) {
@@ -75,4 +74,99 @@ if (subjectCount === 0) {
   defaultSubjects.forEach((name) => insertSubject.run(name));
 }
 
+// ترحيل تلقائي: أي معلم عنده تخصص قديم (حقل نصي) بس ما عنده صفوف بجدول teacher_subjects بعد
+// يُربط تلقائياً بالمادة المطابقة لاسم تخصصه (مرة وحدة فقط، لضمان التوافق مع البيانات القديمة)
+const legacyTeachers = db
+  .prepare(
+    `SELECT t.id, t.specialty FROM teachers t
+     WHERE t.specialty IS NOT NULL AND t.specialty != ''
+     AND NOT EXISTS (SELECT 1 FROM teacher_subjects ts WHERE ts.teacher_id = t.id)`
+  )
+  .all();
+if (legacyTeachers.length > 0) {
+  const linkStmt = db.prepare(
+    "INSERT OR IGNORE INTO teacher_subjects (teacher_id, subject_id) SELECT ?, id FROM subjects WHERE name = ?"
+  );
+  legacyTeachers.forEach((t) => linkStmt.run(t.id, t.specialty));
+}
+
+// ---------- ترحيل آمن (إضافة فقط — بدون DROP ولا حذف بيانات) ----------
+function ensureColumn(table, column, definition) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+ensureColumn("teachers", "class_teacher_of", "INTEGER");
+ensureColumn("subjects", "color", "TEXT");
+ensureColumn("school_classes", "custom_periods_per_day", "INTEGER");
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS schedule_shifts (
+  shift_type TEXT PRIMARY KEY,            -- morning | evening
+  label TEXT NOT NULL,
+  start_time TEXT NOT NULL,
+  period_count INTEGER NOT NULL DEFAULT 6,
+  period_minutes INTEGER NOT NULL DEFAULT 40,
+  break_minutes INTEGER NOT NULL DEFAULT 5
+);
+
+-- كل يوم يتبع شفت (morning/evening) أو NULL = عطلة
+CREATE TABLE IF NOT EXISTS day_shift_config (
+  day_of_week INTEGER PRIMARY KEY,
+  shift_type TEXT REFERENCES schedule_shifts(shift_type)
+);
+
+-- مواد كل صف + عدد حصصها الأسبوعي + هل يُسمح بتكرارها في نفس اليوم
+CREATE TABLE IF NOT EXISTS class_subjects (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  class_id INTEGER NOT NULL REFERENCES school_classes(id) ON DELETE CASCADE,
+  subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+  weekly_periods INTEGER NOT NULL DEFAULT 1,
+  allow_same_day_repeat INTEGER NOT NULL DEFAULT 0,
+  max_per_day INTEGER NOT NULL DEFAULT 1,
+  UNIQUE(class_id, subject_id)
+);
+
+-- ربط المعلم بالصف والمادة
+CREATE TABLE IF NOT EXISTS teacher_assignments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  teacher_id INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+  class_id INTEGER NOT NULL REFERENCES school_classes(id) ON DELETE CASCADE,
+  subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+  UNIQUE(teacher_id, class_id, subject_id)
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  action TEXT NOT NULL,
+  details TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+`);
+
+// قيم أولية (مرة واحدة فقط إذا الجداول فارغة)
+if (db.prepare("SELECT COUNT(*) AS n FROM schedule_shifts").get().n === 0) {
+  const ins = db.prepare(
+    "INSERT INTO schedule_shifts (shift_type, label, start_time, period_count, period_minutes, break_minutes) VALUES (?,?,?,?,?,?)"
+  );
+  ins.run("morning", "صباحي", "08:00", 6, 40, 5);
+  ins.run("evening", "مسائي", "13:00", 6, 40, 5);
+}
+if (db.prepare("SELECT COUNT(*) AS n FROM day_shift_config").get().n === 0) {
+  const ins = db.prepare("INSERT INTO day_shift_config (day_of_week, shift_type) VALUES (?, ?)");
+  [["morning"], ["morning"], ["morning"], ["evening"], ["evening"], [null], [null]].forEach((v, i) => ins.run(i, v[0]));
+}
+if (!db.prepare("SELECT 1 FROM settings WHERE key = 'schedule_status'").get()) {
+  db.prepare("INSERT INTO settings (key, value) VALUES ('schedule_status', 'draft')").run();
+}
+
+const PALETTE = ["#2F4858", "#C98A3E", "#4C7A6B", "#8E5B45", "#5B6EA8", "#8B6F9E", "#B4533C", "#5D8A6E"];
+db.prepare("SELECT id FROM subjects WHERE color IS NULL").all().forEach((s) =>
+  db.prepare("UPDATE subjects SET color = ? WHERE id = ?").run(PALETTE[s.id % PALETTE.length], s.id)
+);
+
 module.exports = db;
+module.exports.ensureColumn = ensureColumn;
+module.exports.PALETTE = PALETTE;

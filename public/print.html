@@ -8,112 +8,82 @@
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css" />
 <style>
-  body { background: #fff; padding: 28px; }
+  @page { size: A4 landscape; margin: 10mm; }
+  body { background: #fff; padding: 20px; }
   .print-actions { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 14px; }
-  .filter-subtitle { text-align: center; color: var(--muted); font-size: 13px; margin-top: -8px; margin-bottom: 20px; }
+  .sheet { page-break-after: always; break-after: page; }
+  .sheet:last-child { page-break-after: auto; break-after: auto; }
+  .sub-title { text-align: center; font-family: "Cairo", sans-serif; font-weight: 700; font-size: 17px; margin: -8px 0 4px; color: var(--ink); }
+  .year { text-align: center; color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+  .timetable { min-width: 0; }
+  .timetable td { height: 64px; min-width: 0; }
+  .shift-tag { display: block; font-size: 10px; font-weight: 500; opacity: .8; }
   @media print {
     .print-actions { display: none; }
-    body { padding: 0; }
-    .timetable-wrap { box-shadow: none; }
+    body { padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .timetable-wrap { box-shadow: none; border-radius: 0; overflow: visible; }
+    .timetable { border-radius: 0; }
+    .timetable td { height: 17mm; padding: 3px; }
+    .slot { box-shadow: none; padding: 4px 7px; }
+    .school-header { margin-bottom: 8px; }
+    .school-header img { max-height: 16mm; }
+    .school-header h1 { font-size: 19px; }
   }
 </style>
 </head>
 <body>
-  <div class="print-actions">
-    <button class="btn btn-primary" onclick="window.print()">🖨️ طباعة</button>
-  </div>
-
-  <div class="school-header" id="schoolHeader">
-    <h1>جدول الحصص الأسبوعي</h1>
-  </div>
-  <p class="filter-subtitle" id="filterSubtitle"></p>
-
-  <div id="scheduleGrid" class="timetable-wrap"></div>
+  <div class="print-actions"><button class="btn btn-primary" onclick="window.print()">🖨️ طباعة (A4 أفقي)</button></div>
+  <div id="sheets"></div>
 
 <script>
 const DAY_NAMES = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
-const SUBJECT_PALETTE = ["#2F4858", "#C98A3E", "#4C7A6B", "#8E5B45", "#5B6EA8", "#8B6F9E", "#B4533C", "#5D8A6E"];
+const SHIFT_LABEL = { morning: "صباحي", evening: "مسائي" };
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const api = (p) => fetch(p).then((r) => r.json());
 
-function subjectColor(name) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
-  return SUBJECT_PALETTE[hash % SUBJECT_PALETTE.length];
-}
-
-async function api(path) {
-  const res = await fetch(path);
-  return res.json();
-}
-
-async function render() {
-  const params = new URLSearchParams(location.search);
-  const classId = params.get("class_id");
-  const teacherId = params.get("teacher_id");
-
-  let scheduleUrl = "/api/public/schedule";
-  const qs = [];
-  if (classId) qs.push(`class_id=${classId}`);
-  if (teacherId) qs.push(`teacher_id=${teacherId}`);
-  if (qs.length) scheduleUrl += "?" + qs.join("&");
-
-  const [schedule, classes, teachers, schoolInfo] = await Promise.all([
-    api(scheduleUrl),
-    api("/api/public/classes"),
-    api("/api/public/teachers"),
-    api("/api/public/school-info"),
-  ]);
-
-  // ترويسة المدرسة: الشعار، ثم عنوان الجدول، وتحته اسم المدرسة
-  const headerEl = document.getElementById("schoolHeader");
-  let headerHtml = "";
-  if (schoolInfo.school_logo) headerHtml += `<img src="${schoolInfo.school_logo}" alt="شعار المدرسة" />`;
-  headerHtml += `<h1>جدول الحصص الأسبوعي</h1>`;
-  if (schoolInfo.school_name) headerHtml += `<div class="school-name">${schoolInfo.school_name}</div>`;
-  headerEl.innerHTML = headerHtml;
-
-  let subtitle = "";
-  if (classId) {
-    const cls = classes.find((c) => String(c.id) === classId);
-    subtitle = cls ? `صف: ${cls.name}` : "";
-  } else if (teacherId) {
-    const t = teachers.find((t) => String(t.id) === teacherId);
-    subtitle = t ? `المعلم: ${t.name}` : "";
-  }
-  document.getElementById("filterSubtitle").textContent = subtitle;
-
-  const periodNumbers = [...new Set(schedule.map((s) => s.period_number))].sort((a, b) => a - b);
-  const byDayPeriod = {};
-  schedule.forEach((s) => {
-    const key = `${s.day_of_week}-${s.period_number}`;
-    if (!byDayPeriod[key]) byDayPeriod[key] = [];
-    byDayPeriod[key].push(s);
-  });
-
-  let html = `<table class="timetable"><thead><tr><th></th>${DAY_NAMES.map((d) => `<th>${d}</th>`).join("")}</tr></thead><tbody>`;
-  periodNumbers.forEach((num) => {
-    const timeRow = schedule.find((s) => s.period_number === num);
-    const timeLabel = timeRow && timeRow.start_time ? `<div class="period-time">${timeRow.start_time}</div>` : "";
-    html += `<tr><th class="period-cell"><span class="period-tab">${num}</span>${timeLabel}</th>`;
-    DAY_NAMES.forEach((_, dayIdx) => {
-      const entries = byDayPeriod[`${dayIdx}-${num}`] || [];
-      html += "<td>";
-      entries.forEach((e) => {
-        html += `<div class="slot" style="--slot-color:${subjectColor(e.subject_name)}">
-          <span class="subj">${e.subject_name}</span>
-          <span class="meta">${e.class_name} · ${e.teacher_name}</span>
-        </div>`;
-      });
-      html += "</td>";
+function sheet({ info, title, rows, dayPeriods, shifts, mode, cls }) {
+  const days = Object.keys(dayPeriods).map(Number).sort((a, b) => a - b);
+  const periodsOf = (d) => (cls && cls.custom_periods_per_day ? cls.custom_periods_per_day : dayPeriods[d].length);
+  const maxP = Math.max(...days.map(periodsOf), 0);
+  let h = `<section class="sheet"><div class="school-header">`;
+  if (info.school_logo) h += `<img src="${esc(info.school_logo)}" alt="شعار المدرسة" />`;
+  h += `<h1>جدول الحصص الأسبوعي</h1>`;
+  if (info.school_name) h += `<div class="school-name">${esc(info.school_name)}</div>`;
+  h += `</div><div class="sub-title">${esc(title)}</div>`;
+  if (info.school_year) h += `<div class="year">العام الدراسي ${esc(info.school_year)}</div>`;
+  h += `<div class="timetable-wrap"><table class="timetable"><thead><tr><th></th>${days.map((d) => `<th>${DAY_NAMES[d]}<span class="shift-tag">${SHIFT_LABEL[shifts[d]] || ""}</span></th>`).join("")}</tr></thead><tbody>`;
+  for (let p = 1; p <= maxP; p++) {
+    h += `<tr><th class="period-cell"><span class="period-tab">${p}</span></th>`;
+    days.forEach((d) => {
+      if (p > periodsOf(d)) { h += `<td class="off"></td>`; return; }
+      const pt = dayPeriods[d][p - 1];
+      const s = rows.find((r) => r.day_of_week === d && r.period_number === p);
+      h += `<td>${pt ? `<div class="cell-time">${pt.start}–${pt.end}</div>` : ""}${s ? `<div class="slot" style="--slot-color:${esc(s.subject_color || "#2F4858")}"><span class="subj">${esc(s.subject_name)}</span><span class="meta">${esc(mode === "teacher" ? s.class_name : s.teacher_name)}</span></div>` : ""}</td>`;
     });
-    html += "</tr>";
-  });
-  html += "</tbody></table>";
-
-  document.getElementById("scheduleGrid").innerHTML =
-    periodNumbers.length ? html : '<p class="muted-text">لا يوجد جدول محفوظ بعد.</p>';
+    h += "</tr>";
+  }
+  return h + "</tbody></table></div></section>";
 }
 
-render();
+(async function () {
+  const q = new URLSearchParams(location.search);
+  const [info, schedule, classes, teachers, dayPeriods, wd] = await Promise.all([
+    api("/api/public/school-info"), api("/api/public/schedule"), api("/api/public/classes"),
+    api("/api/public/teachers"), api("/api/public/day-periods"), api("/api/public/working-days"),
+  ]);
+  const shifts = wd.shifts;
+  const out = [];
+  if (q.get("all")) {
+    classes.forEach((c) => out.push(sheet({ info, title: `الصف: ${c.name}`, rows: schedule.filter((s) => s.class_id === c.id), dayPeriods, shifts, mode: "class", cls: c })));
+  } else if (q.get("teacher_id")) {
+    const t = teachers.find((x) => String(x.id) === q.get("teacher_id"));
+    out.push(sheet({ info, title: `المعلم: ${t ? t.name : ""}`, rows: schedule.filter((s) => String(s.teacher_id) === q.get("teacher_id")), dayPeriods, shifts, mode: "teacher" }));
+  } else {
+    const c = classes.find((x) => String(x.id) === q.get("class_id")) || classes[0];
+    if (c) out.push(sheet({ info, title: `الصف: ${c.name}`, rows: schedule.filter((s) => s.class_id === c.id), dayPeriods, shifts, mode: "class", cls: c }));
+  }
+  document.getElementById("sheets").innerHTML = out.join("") || '<p class="muted-text">لا يوجد جدول محفوظ بعد.</p>';
+})();
 </script>
 </body>
 </html>
