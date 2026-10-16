@@ -1,5 +1,7 @@
 const express = require("express");
 const db = require("../db");
+const { audit } = require("./util");
+const svc = require("../services/scheduleTime.service");
 
 const router = express.Router();
 
@@ -26,11 +28,12 @@ router.get("/", (req, res) => {
 
 // إضافة معلم جديد — يقدر يدرّس أكثر من مادة (subject_ids: مصفوفة)
 router.post("/", (req, res) => {
-  const { name, phone, subject_ids } = req.body;
+  const { name, phone, subject_ids, class_teacher_of } = req.body;
   if (!name || !name.trim()) {
     return res.status(400).json({ error: "اسم المعلم مطلوب" });
   }
-  const result = db.prepare("INSERT INTO teachers (name, phone) VALUES (?, ?)").run(name.trim(), phone || null);
+  const result = db.prepare("INSERT INTO teachers (name, phone, class_teacher_of) VALUES (?, ?, ?)").run(name.trim(), phone || null, class_teacher_of || null);
+  audit("teacher_created", { name: name.trim() });
   setTeacherSubjects(result.lastInsertRowid, subject_ids);
   const teacher = db.prepare("SELECT * FROM teachers WHERE id = ?").get(result.lastInsertRowid);
   res.status(201).json(attachSubjects([teacher])[0]);
@@ -38,13 +41,14 @@ router.post("/", (req, res) => {
 
 // تعديل بيانات معلم (اسم، هاتف، والمواد اللي يدرّسها)
 router.put("/:id", (req, res) => {
-  const { name, phone, subject_ids } = req.body;
+  const { name, phone, subject_ids, class_teacher_of } = req.body;
   const teacher = db.prepare("SELECT * FROM teachers WHERE id = ?").get(req.params.id);
   if (!teacher) return res.status(404).json({ error: "المعلم غير موجود" });
 
-  db.prepare("UPDATE teachers SET name = ?, phone = ? WHERE id = ?").run(
+  db.prepare("UPDATE teachers SET name = ?, phone = ?, class_teacher_of = ? WHERE id = ?").run(
     name ?? teacher.name,
     phone ?? teacher.phone,
+    class_teacher_of === undefined ? teacher.class_teacher_of : class_teacher_of || null,
     req.params.id
   );
   if (subject_ids !== undefined) setTeacherSubjects(req.params.id, subject_ids);
@@ -58,23 +62,19 @@ router.delete("/:id", (req, res) => {
   res.json({ ok: true });
 });
 
-// جدول حصص معلم معين (كل الأسبوع)
+// جدول حصص معلم معين (كل الأسبوع) مع الأوقات المحسوبة
 router.get("/:id/schedule", (req, res) => {
   const rows = db
     .prepare(
-      `SELECT s.id, s.day_of_week, s.period_number,
-              COALESCE(pt_day.start_time, pt_default.start_time) AS start_time,
-              COALESCE(pt_day.end_time, pt_default.end_time) AS end_time,
-              c.name AS class_name, sub.name AS subject_name
+      `SELECT s.id, s.day_of_week, s.period_number, c.name AS class_name, sub.name AS subject_name
        FROM schedule s
        JOIN school_classes c ON c.id = s.class_id
        JOIN subjects sub ON sub.id = s.subject_id
-       LEFT JOIN period_times pt_day ON pt_day.day_of_week = s.day_of_week AND pt_day.period_number = s.period_number
-       LEFT JOIN period_times pt_default ON pt_default.day_of_week = -1 AND pt_default.period_number = s.period_number
        WHERE s.teacher_id = ?
        ORDER BY s.day_of_week, s.period_number`
     )
-    .all(req.params.id);
+    .all(req.params.id)
+    .map((r) => ({ ...r, ...svc.getPeriodTime(r.day_of_week, r.period_number) }));
   res.json(rows);
 });
 

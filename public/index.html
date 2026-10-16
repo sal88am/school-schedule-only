@@ -39,7 +39,8 @@
       <button class="nav-link" data-view="teachers">👤 الكادر التدريسي</button>
       <button class="nav-link" data-view="subjects">📚 المواد الدراسية</button>
       <button class="nav-link" data-view="classes">🏫 الصفوف والشعب</button>
-      <button class="nav-link" data-view="periodTimes">🕐 توقيت الحصص</button>
+      <button class="nav-link" data-view="assignments">🧩 توزيع المواد</button>
+      <button class="nav-link" data-view="shifts">🕐 إعدادات الدوام</button>
       <button class="nav-link" data-view="schedule">🗓️ الجدول الدراسي</button>
       <button class="nav-link" data-view="settings">⚙️ الإعدادات</button>
     </nav>
@@ -54,6 +55,7 @@
         <p>ملخص سريع عن المدرسة</p>
       </header>
       <div class="stat-grid" id="statGrid"></div>
+      <div class="card" id="dashProgress"></div>
       <div class="card">
         <h3>جدول اليوم</h3>
         <div id="todaySchedule" class="table-wrap"></div>
@@ -74,6 +76,8 @@
             <input name="name" placeholder="الاسم الكامل" required />
             <input name="phone" placeholder="رقم الهاتف (اختياري)" />
           </div>
+          <label class="field-label">معلم/ـة صف (اختياري)</label>
+          <select name="class_teacher_of" id="classTeacherSelect"></select>
           <label class="field-label">المواد التي يدرّسها</label>
           <div id="teacherSubjectsCheckboxes" class="checkbox-grid"></div>
           <div class="form-row">
@@ -124,7 +128,7 @@
             <option value="السادس">السادس</option>
           </select>
           <input name="sections_count" type="number" min="1" max="20" placeholder="عدد الشعب" required />
-          <input name="periods_per_day" type="number" min="1" max="12" placeholder="عدد الحصص باليوم" required />
+          <input name="periods_per_day" type="number" min="1" max="12" placeholder="حصص/يوم (اختياري — وإلا حسب الدوام)" />
           <button class="btn btn-accent" type="submit">توليد الشعب</button>
         </form>
         <p id="classGenError" class="error-text"></p>
@@ -136,37 +140,67 @@
       </div>
     </section>
 
-    <!-- توقيت الحصص -->
-    <section id="view-periodTimes" class="view">
+    <!-- توزيع المواد -->
+    <section id="view-assignments" class="view">
       <header class="view-header">
-        <h2>توقيت الحصص</h2>
-        <p>توقيت موحّد لكل رقم حصة، يتكرر نفسه كل يوم دوام</p>
+        <h2>توزيع المواد</h2>
+        <p>حدّد لكل صف عدد حصص كل مادة أسبوعياً، ثم اربط المعلم بالصف والمادة</p>
       </header>
 
       <div class="card">
-        <h3>إضافة / تعديل توقيت حصة</h3>
-        <form id="periodTimeForm" class="form-row">
-          <input name="period_number" type="number" min="1" placeholder="رقم الحصة" required />
-          <select name="day_of_week">
-            <option value="all">كل أيام الدوام</option>
-            <option value="0">الأحد فقط</option>
-            <option value="1">الاثنين فقط</option>
-            <option value="2">الثلاثاء فقط</option>
-            <option value="3">الأربعاء فقط</option>
-            <option value="4">الخميس فقط</option>
-            <option value="5">الجمعة فقط</option>
-            <option value="6">السبت فقط</option>
-          </select>
-          <input name="start_time" type="time" required />
-          <input name="end_time" type="time" required />
-          <button class="btn btn-accent" type="submit">حفظ</button>
+        <h3>عدد الحصص الأسبوعي لكل مادة</h3>
+        <form id="classSubjectForm" class="form-col">
+          <div class="form-row">
+            <select name="target" id="csTarget" required></select>
+            <select name="subject_id" id="csSubject" required></select>
+            <label class="field-label">حصص/أسبوع</label>
+            <input name="weekly_periods" type="number" min="0" max="30" value="4" required style="width:90px" />
+          </div>
+          <div class="form-row">
+            <label class="checkbox-label"><input type="checkbox" name="allow_same_day_repeat" id="csRepeat" /> السماح بتكرار المادة في نفس اليوم</label>
+            <span id="csMaxWrap" class="hidden">
+              <label class="field-label">الحد الأقصى باليوم</label>
+              <input name="max_per_day" type="number" min="2" max="6" value="2" style="width:80px" />
+            </span>
+          </div>
+          <p class="muted-text">مثال: الخامس — انكليزي — 4 حصص. اختر «كل شعب المرحلة» لتطبيقه على الخامس أ، ب، ج... دفعة واحدة. عند السماح بالتكرار توضع الحصتان المكررتان متتاليتين قدر الإمكان.</p>
+          <div class="form-row"><button class="btn btn-accent" type="submit">حفظ</button></div>
         </form>
-        <p class="muted-text">اختر "كل أيام الدوام" لتوقيت موحّد، أو يوم محدد إذا هذا اليوم بس يختلف توقيته عن باقي الأيام.</p>
+        <p id="csError" class="error-text"></p>
       </div>
 
       <div class="card">
-        <h3>الحصص المعرّفة</h3>
-        <div id="periodTimesTable" class="table-wrap"></div>
+        <div class="schedule-toolbar"><h3>مواد الصفوف</h3>
+          <select id="csFilterClass"></select></div>
+        <div id="classSubjectsTable" class="table-wrap"></div>
+      </div>
+
+      <div class="card">
+        <div class="schedule-toolbar"><h3>ربط المعلم بالصف والمادة</h3>
+          <button class="btn btn-primary" id="autoAssignBtn" type="button">⚡ إسناد تلقائي للمواد غير المسندة</button></div>
+        <form id="assignForm" class="form-row">
+          <select name="teacher_id" required></select>
+          <select name="class_id" required></select>
+          <select name="subject_id" required></select>
+          <button class="btn btn-accent" type="submit">ربط</button>
+        </form>
+        <p id="assignError" class="error-text"></p>
+        <div id="assignTable" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <!-- إعدادات الدوام -->
+    <section id="view-shifts" class="view">
+      <header class="view-header">
+        <h2>إعدادات الدوام</h2>
+        <p>أوقات الحصص تُحسب تلقائياً من وقت البداية ومدة الحصة والاستراحة</p>
+      </header>
+      <div id="shiftCards" class="two-col"></div>
+      <div class="card">
+        <h3>نوع الدوام لكل يوم</h3>
+        <div id="dayShiftGrid" class="day-shift-grid"></div>
+        <button class="btn btn-accent" id="saveDaysBtn" type="button">حفظ الأيام</button>
+        <p id="daysResult" class="muted-text"></p>
       </div>
     </section>
 
@@ -174,34 +208,33 @@
     <section id="view-schedule" class="view">
       <header class="view-header">
         <h2>الجدول الدراسي</h2>
-        <p>ولّد الجدول تلقائياً، وعدّل عليه يدوياً إذا احتجت</p>
+        <p>ولّد الجدول تلقائياً، راجع تقرير التحقق، عدّل يدوياً (اسحب الحصة لنقلها أو تبديلها)، ثم اعتمده</p>
       </header>
 
       <div class="card">
-        <h3>توليد تلقائي</h3>
-        <p class="muted-text">يستبدل الجدول الحالي بالكامل ويوزع المعلمين على الصفوف تلقائياً حسب تخصص كل معلم.</p>
-        <button class="btn btn-primary" id="autoGenBtn">⚡ توليد الجدول تلقائياً</button>
+        <div class="schedule-toolbar">
+          <h3>الحالة: <span id="statusBadge" class="status-badge"></span></h3>
+          <div class="schedule-controls">
+            <button class="btn btn-primary" id="autoGenBtn">⚡ توليد الجدول تلقائياً</button>
+            <button class="btn btn-accent" id="approveBtn">✔ اعتماد الجدول</button>
+            <button class="btn btn-ghost hidden" id="unapproveBtn">🔓 فتح التعديل</button>
+          </div>
+        </div>
         <p id="autoGenResult" class="muted-text"></p>
+        <div id="validationReport"></div>
       </div>
 
-      <div class="card">
-        <h3>إضافة/تعديل حصة يدوياً</h3>
+      <div class="card" id="manualCard">
+        <h3>إضافة حصة يدوياً</h3>
         <form id="scheduleForm" class="form-row">
-          <select name="teacher_id" required></select>
           <select name="class_id" required></select>
           <select name="subject_id" required></select>
-          <select name="day_of_week" required>
-            <option value="0">الأحد</option>
-            <option value="1">الاثنين</option>
-            <option value="2">الثلاثاء</option>
-            <option value="3">الأربعاء</option>
-            <option value="4">الخميس</option>
-            <option value="5">الجمعة</option>
-            <option value="6">السبت</option>
-          </select>
-          <input name="period_number" type="number" min="1" placeholder="رقم الحصة" required />
+          <select name="teacher_id" required></select>
+          <select name="day_of_week" required></select>
+          <input name="period_number" type="number" min="1" placeholder="رقم الحصة" required style="width:110px" />
           <button class="btn btn-accent" type="submit">تعيين</button>
         </form>
+        <p class="muted-text">لا يوجد شرط تخصص: يمكن تعيين أي معلم لأي مادة. يُفحص التعارض قبل الحفظ.</p>
         <p id="scheduleError" class="error-text"></p>
       </div>
 
@@ -210,12 +243,12 @@
           <h3>عرض الجدول</h3>
           <div class="schedule-controls">
             <select id="scheduleFilterType">
-              <option value="all">الجدول الكامل</option>
-              <option value="class">صف معيّن</option>
-              <option value="teacher">معلم معيّن</option>
+              <option value="class">جدول صف</option>
+              <option value="teacher">جدول معلم</option>
             </select>
-            <select id="scheduleFilterValue" class="hidden"></select>
+            <select id="scheduleFilterValue"></select>
             <button class="btn btn-ghost" id="printBtn">🖨️ طباعة</button>
+            <button class="btn btn-ghost" id="printAllBtn">🖨️ طباعة كل الصفوف</button>
             <button class="btn btn-ghost" id="shareBtn">🔗 نسخ رابط المشاركة</button>
           </div>
         </div>
@@ -228,7 +261,7 @@
     <section id="view-settings" class="view">
       <header class="view-header">
         <h2>الإعدادات</h2>
-        <p>معلومات المدرسة وأيام الدوام</p>
+        <p>معلومات المدرسة</p>
       </header>
 
       <div class="card">
@@ -236,6 +269,7 @@
         <p class="muted-text">تظهر بأعلى صفحة مشاركة/طباعة الجدول</p>
         <form id="schoolInfoForm" class="form-col">
           <input name="school_name" placeholder="اسم المدرسة" />
+          <input name="school_year" placeholder="العام الدراسي (مثال 2026 - 2027)" />
           <input name="school_logo" type="file" accept="image/*" />
           <div id="logoPreviewWrap" class="hidden">
             <img id="logoPreview" alt="الشعار" />
@@ -246,25 +280,26 @@
         <p id="schoolInfoResult" class="muted-text"></p>
       </div>
 
-      <div class="card">
-        <h3>أيام الدوام</h3>
-        <form id="workingDaysForm" class="form-row">
-          <label class="checkbox-label"><input type="checkbox" value="0" /> الأحد</label>
-          <label class="checkbox-label"><input type="checkbox" value="1" /> الاثنين</label>
-          <label class="checkbox-label"><input type="checkbox" value="2" /> الثلاثاء</label>
-          <label class="checkbox-label"><input type="checkbox" value="3" /> الأربعاء</label>
-          <label class="checkbox-label"><input type="checkbox" value="4" /> الخميس</label>
-          <label class="checkbox-label"><input type="checkbox" value="5" /> الجمعة</label>
-          <label class="checkbox-label"><input type="checkbox" value="6" /> السبت</label>
-          <button class="btn btn-accent" type="submit">حفظ</button>
-        </form>
-        <p id="workingDaysResult" class="muted-text"></p>
-      </div>
     </section>
 
   </main>
 </div>
 
+<div id="slotModal" class="modal hidden">
+  <div class="modal-card modal-wide">
+    <h3 id="slotModalTitle"></h3>
+    <form id="slotForm" class="form-col">
+      <label class="field-label">المادة</label><select name="subject_id"></select>
+      <label class="field-label">المعلم</label><select name="teacher_id"></select>
+      <p id="slotError" class="error-text"></p>
+      <div class="form-row">
+        <button class="btn btn-accent" type="submit">حفظ</button>
+        <button class="btn btn-danger hidden" type="button" id="slotDeleteBtn">حذف الحصة</button>
+        <button class="btn btn-ghost" type="button" id="slotCancelBtn">إغلاق</button>
+      </div>
+    </form>
+  </div>
+</div>
 <script src="app.js"></script>
 </body>
 </html>
