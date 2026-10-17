@@ -39,7 +39,8 @@
 const DAY_NAMES = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const SHIFT_LABEL = { morning: "صباحي", evening: "مسائي" };
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const api = (p) => fetch(p).then((r) => r.json());
+const CODE = new URLSearchParams(location.search).get("s") || "";
+const api = (p) => fetch(p.replace("/api/public/", `/api/public/${encodeURIComponent(CODE)}/`)).then((r) => r.json());
 
 function sheet({ info, title, rows, dayPeriods, shifts, mode, cls }) {
   const days = Object.keys(dayPeriods).map(Number).sort((a, b) => a - b);
@@ -71,6 +72,7 @@ function sheet({ info, title, rows, dayPeriods, shifts, mode, cls }) {
     api("/api/public/school-info"), api("/api/public/schedule"), api("/api/public/classes"),
     api("/api/public/teachers"), api("/api/public/day-periods"), api("/api/public/working-days"),
   ]);
+  if (!Array.isArray(classes) || !Array.isArray(schedule)) { document.getElementById("sheets").innerHTML = '<p class="muted-text">الرابط غير صالح.</p>'; return; }
   const shifts = wd.shifts;
   const out = [];
   if (q.get("all")) {
@@ -82,7 +84,7 @@ function sheet({ info, title, rows, dayPeriods, shifts, mode, cls }) {
     const c = classes.find((x) => String(x.id) === q.get("class_id")) || classes[0];
     if (c) out.push(sheet({ info, title: `الصف: ${c.name}`, rows: schedule.filter((s) => s.class_id === c.id), dayPeriods, shifts, mode: "class", cls: c }));
   }
-  document.getElementById("sheets").innerHTML = out.join("") || '<p class="muted-text">لا يوجد جدول محفوظ بعد.</p>';
+  document.getElementById("sheets").innerHTML = out.length ? out.join("")   : '<p class="muted-text">الرابط غير صالح أو لا يوجد جدول محفوظ بعد.</p>';
 })();
 </script>
 </body>

@@ -1,6 +1,10 @@
-/.git
-/node_modules
-.dockerignore
+node_modules/
+.git/
 .env
-Dockerfile
-fly.toml
+.env.*
+!.env.example
+data/
+*.db
+*.db-shm
+*.db-wal
+npm-debug.log*

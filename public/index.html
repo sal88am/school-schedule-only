@@ -20,8 +20,10 @@
         <p>نظام إدارة الحصص الدراسية</p>
       </div>
     </div>
-    <label for="pwInput">كلمة مرور الإدارة</label>
-    <input id="pwInput" type="password" placeholder="••••••••" />
+    <label for="userInput">اسم المستخدم</label>
+    <input id="userInput" type="text" autocomplete="username" dir="ltr" placeholder="username" />
+    <label for="pwInput">كلمة المرور</label>
+    <input id="pwInput" type="password" autocomplete="current-password" dir="ltr" placeholder="••••••••" />
     <button id="loginBtn" class="btn btn-primary">دخول</button>
     <p id="loginError" class="error-text"></p>
   </div>
@@ -34,22 +36,59 @@
       <span class="brand-mark">سِ</span>
       <div><h1>سِجِلّ</h1></div>
     </div>
+    <div id="userBox" class="user-box"></div>
     <nav>
-      <button class="nav-link active" data-view="dashboard">📋 نظرة عامة</button>
-      <button class="nav-link" data-view="teachers">👤 الكادر التدريسي</button>
-      <button class="nav-link" data-view="subjects">📚 المواد الدراسية</button>
-      <button class="nav-link" data-view="classes">🏫 الصفوف والشعب</button>
-      <button class="nav-link" data-view="assignments">🧩 توزيع المواد</button>
-      <button class="nav-link" data-view="shifts">🕐 إعدادات الدوام</button>
-      <button class="nav-link" data-view="schedule">🗓️ الجدول الدراسي</button>
-      <button class="nav-link" data-view="settings">⚙️ الإعدادات</button>
+      <button class="nav-link nav-super hidden" data-view="schools">🏛️ المدارس</button>
+      <button class="nav-link nav-teacher hidden" data-view="mySchedule">🗓️ جدولي</button>
+      <button class="nav-link nav-school active" data-view="dashboard">📋 نظرة عامة</button>
+      <button class="nav-link nav-school" data-view="teachers">👤 الكادر التدريسي</button>
+      <button class="nav-link nav-school" data-view="subjects">📚 المواد الدراسية</button>
+      <button class="nav-link nav-school" data-view="classes">🏫 الصفوف والشعب</button>
+      <button class="nav-link nav-school" data-view="assignments">🧩 توزيع المواد</button>
+      <button class="nav-link nav-school" data-view="shifts">🕐 إعدادات الدوام</button>
+      <button class="nav-link nav-school" data-view="schedule">🗓️ الجدول الدراسي</button>
+      <button class="nav-link nav-school" data-view="settings">⚙️ الإعدادات</button>
     </nav>
+    <div class="sidebar-actions">
+      <button class="btn btn-ghost side-btn" id="changePwBtn">🔑 تغيير كلمة المرور</button>
+      <button class="btn btn-ghost side-btn" id="logoutBtn">⎋ تسجيل الخروج</button>
+    </div>
   </aside>
 
   <main class="content">
 
+    <div id="actingBanner" class="acting-banner hidden"></div>
+
+    <!-- المدارس (المدير العام) -->
+    <section id="view-schools" class="view">
+      <header class="view-header">
+        <h2>المدارس</h2>
+        <p>لكل مدرسة حساب مدير مستقل وبيانات معزولة تماماً عن بقية المدارس</p>
+      </header>
+      <div class="card">
+        <h3>إضافة مدرسة جديدة</h3>
+        <form id="schoolCreateForm" class="form-row">
+          <input name="name" placeholder="اسم المدرسة" required />
+          <input name="admin_username" placeholder="اسم مستخدم المدير (إنكليزي)" dir="ltr" required />
+          <input name="admin_password" type="text" placeholder="كلمة المرور (8 أحرف+)" dir="ltr" required />
+          <button class="btn btn-accent" type="submit">إنشاء المدرسة</button>
+        </form>
+        <p id="schoolCreateMsg" class="error-text"></p>
+      </div>
+      <div class="card">
+        <h3>المدارس المسجّلة</h3>
+        <div id="schoolsTable" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <!-- جدولي (المعلم) -->
+    <section id="view-mySchedule" class="view">
+      <header class="view-header"><h2>جدولي</h2><p>جدول حصصك الأسبوعي</p></header>
+      <div class="card"><div id="myScheduleGrid" class="timetable-wrap"></div></div>
+    </section>
+
     <!-- نظرة عامة -->
-    <section id="view-dashboard" class="view active">
+    <section id="view-dashboard" class="view">
       <header class="view-header">
         <h2>نظرة عامة</h2>
         <p>ملخص سريع عن المدرسة</p>
@@ -297,6 +336,17 @@
         <button class="btn btn-danger hidden" type="button" id="slotDeleteBtn">حذف الحصة</button>
         <button class="btn btn-ghost" type="button" id="slotCancelBtn">إغلاق</button>
       </div>
+    </form>
+  </div>
+</div>
+<div id="pwModal" class="modal hidden">
+  <div class="modal-card modal-wide">
+    <h3>تغيير كلمة المرور</h3>
+    <form id="pwForm" class="form-col">
+      <input name="old_password" type="password" placeholder="كلمة المرور الحالية" required />
+      <input name="new_password" type="password" placeholder="كلمة المرور الجديدة (8 أحرف+)" required />
+      <p id="pwMsg" class="error-text"></p>
+      <div class="form-row"><button class="btn btn-accent" type="submit">حفظ</button><button class="btn btn-ghost" type="button" id="pwCancel">إغلاق</button></div>
     </form>
   </div>
 </div>
