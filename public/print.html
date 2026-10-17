@@ -27,30 +27,53 @@
   .chip { display: inline-block; background: var(--brand); color: #fff; padding: 6px 18px; border-radius: 9px; font: 700 16px "Cairo", sans-serif; }
   .year { margin-top: 4px; font-size: 12px; color: var(--muted); }
 
-  table { width: 100%; border-collapse: separate; border-spacing: 0; flex: 1; table-layout: fixed; border: 1.5px solid var(--brand); border-radius: 8px; overflow: hidden; }
-  thead th { background: var(--brand); color: #fff; font: 700 15px "Cairo", sans-serif; padding: 8px 4px; text-align: center; border-bottom: 4px solid var(--accent); }
-  thead th:first-child { border-inline-start: 0; }
-  table { border-radius: 12px; border: 1px solid var(--line); }
-  .sh { display: block; font: 500 10px "IBM Plex Sans Arabic", sans-serif; opacity: .8; }
-  th.lesson { width: 27mm; background: #F4F6F9; color: var(--brand); font: 700 14px "Cairo", sans-serif; text-align: center; border-top: 1px solid var(--line); border-inline-start: 1px solid var(--line); }
+  table { width: 100%; border-collapse: separate; border-spacing: 0; flex: 1; table-layout: fixed; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  thead th { background: linear-gradient(180deg, #1F4A66, #12324A); color: #fff; font: 700 15px "Cairo", sans-serif; padding: 7px 4px 6px; text-align: center; border-bottom: 4px solid var(--accent); border-inline-start: 1px solid rgba(255,255,255,.14); }
+  thead th.corner { width: 25mm; }
+  thead th .ic { display: block; margin: 2px auto 0; opacity: .85; line-height: 0; }
+  th.day { width: 25mm; background: #EAF1F8; color: var(--brand); font: 800 16px "Cairo", sans-serif; text-align: center; border-top: 1px solid #D5E0EC; border-inline-start: 1px solid var(--line); }
+  th.day .ic { display: block; line-height: 0; margin-bottom: 2px; color: #1F4A66; }
+  th.day .sh { display: block; font: 500 9.5px "IBM Plex Sans Arabic", sans-serif; color: var(--muted); }
   td { border-top: 1px solid var(--line); border-inline-start: 1px solid var(--line); padding: 3px 5px; vertical-align: middle; text-align: right; }
   td.off { background: repeating-linear-gradient(45deg, #F6F7F9, #F6F7F9 4px, #ECEEF1 4px, #ECEEF1 8px); }
-  .t { display: inline-block; font: 700 10.5px "JetBrains Mono", monospace; color: #2B3B4A; background: #EEF2F6; padding: 1px 9px; border-radius: 999px; direction: ltr; unicode-bidi: isolate; margin-bottom: 3px; }
-  .slot { --c: var(--brand); border-radius: 10px; padding: 4px 10px; background: #fff; background: color-mix(in srgb, var(--c) 11%, #fff); border-inline-start: 4px solid var(--c); text-align: right; }
-  .slot b { display: block; font: 800 14px "Cairo", sans-serif; color: var(--c); color: color-mix(in srgb, var(--c) 78%, #000); line-height: 1.3; }
-  .slot i { display: block; font: normal 600 12px "IBM Plex Sans Arabic", sans-serif; color: #26343F; line-height: 1.35; }
-  .dense .slot { padding: 2px 8px; border-radius: 8px; } .dense .slot b { font-size: 12px; } .dense .slot i { font-size: 10.5px; } .dense .t { font-size: 9px; padding: 0 7px; margin-bottom: 1px; }
+  .t { display: flex; align-items: center; gap: 4px; width: fit-content; font: 700 10.5px "JetBrains Mono", monospace; color: #2B3B4A; background: #fff; border: 1px solid #E1E7EE; box-shadow: 0 1px 2px rgba(20,33,43,.08); padding: 1px 9px; border-radius: 999px; direction: ltr; unicode-bidi: isolate; margin-bottom: 4px; }
+  .t svg { flex: none; }
+  .slot { --c: var(--brand); display: flex; align-items: center; justify-content: space-between; gap: 6px; border-radius: 9px; padding: 5px 10px; background: color-mix(in srgb, var(--c) 12%, #fff); border-inline-start: 5px solid var(--c); text-align: right; }
+  .slot .tx { min-width: 0; flex: 1; }
+  .slot b { display: block; font: 800 16px "Cairo", sans-serif; color: color-mix(in srgb, var(--c) 78%, #000); line-height: 1.25; }
+  .slot i { display: block; font: normal 600 13px "IBM Plex Sans Arabic", sans-serif; color: #26343F; line-height: 1.35; }
+  .slot .si { flex: none; line-height: 0; color: color-mix(in srgb, var(--c) 82%, #000); }
+  .dense thead th { font-size: 13px; } .dense th.day { font-size: 14px; }
+  .dense .slot { padding: 3px 7px; border-radius: 7px; border-inline-start-width: 4px; } .dense .slot b { font-size: 12.5px; } .dense .slot i { font-size: 10.5px; } .dense .slot .si svg { width: 20px; height: 20px; }
+  .dense .t { font-size: 9px; padding: 0 6px; margin-bottom: 2px; }
+
+  /* ===== A3: كل المدرسة بورقة واحدة ===== */
+  .sheet.a3 { width: 420mm; min-height: 297mm; padding: 8mm; }
+  .a3 .ph { padding-bottom: 6px; margin-bottom: 8px; } .a3 .ph-title h1 { font-size: 26px; } .a3 .ph-logo img { max-height: 24mm; }
+  .grid3 { flex: 1; display: grid; gap: 5mm; grid-template-columns: repeat(var(--cols), 1fr); grid-template-rows: repeat(var(--rows), minmax(0, 1fr)); min-height: 0; }
+  .mini { display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
+  .mini h3 { margin: 0; background: var(--brand); color: #fff; font: 800 calc(13px * var(--k)) "Cairo", sans-serif; padding: 3px 10px; border-bottom: 3px solid var(--accent); text-align: center; }
+  .mini table { border: 0; border-radius: 0; flex: 1; height: 100%; }
+  .mini thead th { font-size: calc(9.5px * var(--k)); padding: 2px 1px; border-bottom: 2px solid var(--accent); }
+  .mini thead th.corner, .mini th.day { width: calc(15mm * var(--k)); }
+  .mini th.day { font-size: calc(10.5px * var(--k)); padding: 1px; } .mini th.day .sh { font-size: calc(7px * var(--k)); }
+  .mini td { padding: 1.2px; }
+  .mini .slot { display: block; padding: 1.5px 3px; border-radius: 4px; border-inline-start-width: 2.5px; height: 100%; }
+  .mini .slot b { font-size: calc(10px * var(--k)); line-height: 1.2; } .mini .slot i { font-size: calc(8px * var(--k)); line-height: 1.2; }
+  .mini .t { font-size: calc(6.5px * var(--k)); padding: 0 4px; margin: 0 0 1px; border-radius: 4px; box-shadow: none; }
+  .mini .slot .si { display: none; }
   .foot { margin-top: 6px; display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); }
   .msg { text-align: center; padding: 60px; color: var(--muted); }
 
   @media print {
     body { background: #fff; }
     .bar { display: none; }
-    .sheet { width: auto; min-height: 0; height: 192mm; margin: 0; padding: 0; box-shadow: none; page-break-after: always; break-after: page; }
+    .sheet { width: auto; min-height: 0; height: 184mm; margin: 0; padding: 0; box-shadow: none; page-break-after: always; break-after: page; }
+    .sheet.a3 { height: 276mm; min-height: 0; width: auto; }
     .sheet:last-child { page-break-after: auto; break-after: auto; }
   }
-  @media (max-width: 1100px) { .sheet { zoom: .55; margin: 8px auto; } }
-  @media (max-width: 700px) { .sheet { zoom: .34; } }
+  @media (max-width: 1100px) { .sheet { zoom: .55; margin: 8px auto; } .sheet.a3 { zoom: .4; } }
+  @media (max-width: 700px) { .sheet { zoom: .34; } .sheet.a3 { zoom: .22; } }
   @media print { .sheet { zoom: 1 !important; } }
 </style>
 </head>
@@ -61,6 +84,7 @@
   </div>
   <div id="sheets"></div>
 
+<script src="tt-icons.js"></script>
 <script>
 function t12p(t) { const [h, m] = String(t).split(":").map(Number); return { t: `${h % 12 || 12}:${String(m).padStart(2, "0")}`, s: h >= 12 ? "م" : "ص" }; }
 const isl = (s) => "\u2066" + s + "\u2069"; // عزل اتجاه النص حتى لا ينقلب ترتيب الوقت
@@ -75,27 +99,65 @@ const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const CODE = new URLSearchParams(location.search).get("s") || "";
 const api = (p) => fetch(p.replace("/api/public/", `/api/public/${encodeURIComponent(CODE)}/`)).then((r) => r.json());
 
+const ic = (n, sz) => (window.TT ? TT.icon(n, sz) : "");
+const pill = (pt) => (pt ? `<span class="t">${ic("clock", 12)}${rng12(pt.start, pt.end)}</span>` : "");
+
 function sheet({ info, subtitle, rows, dayPeriods, shifts, mode, cls }) {
   const days = Object.keys(dayPeriods).map(Number).sort((a, b) => a - b);
   const periodsOf = (d) => (cls && cls.periods_by_day && cls.periods_by_day[d] != null ? cls.periods_by_day[d] : dayPeriods[d].length);
   const maxP = Math.max(...days.map((d) => dayPeriods[d].length), 0);
-  const rowH = Math.max(12, Math.min(22, Math.floor(118 / Math.max(maxP, 1)))); // mm
-  let h = `<section class="sheet ${maxP >= 8 ? "dense" : ""}"><header class="ph">
+  let h = `<section class="sheet ${maxP >= 8 ? "dense" : ""}">${header(info, subtitle)}`;
+  h += `<table><thead><tr><th class="corner"></th>${Array.from({ length: maxP }, (_, i) => `<th>${lessonName(i + 1)}<span class="ic">${window.TT ? TT.head(i + 1, 22) : ""}</span></th>`).join("")}</tr></thead><tbody>`;
+  days.forEach((d) => {
+    h += `<tr style="height:${Math.floor(112 / Math.max(days.length, 1))}mm"><th class="day"><span class="ic">${ic("calendar", 26)}</span>${DAY_NAMES[d]}<span class="sh">${SHIFT_LABEL[shifts[d]] || ""}</span></th>`;
+    for (let p = 1; p <= maxP; p++) {
+      if (p > periodsOf(d)) { h += `<td class="off"></td>`; continue; }
+      const pt = dayPeriods[d][p - 1];
+      const s = rows.find((r) => r.day_of_week === d && r.period_number === p);
+      h += `<td>${pill(pt)}${s ? `<div class="slot" style="--c:${esc(s.subject_color || "#1E3A4C")}"><div class="tx"><b>${esc(s.subject_name)}</b><i>${esc(mode === "teacher" ? s.class_name : s.teacher_name)}</i></div><span class="si">${window.TT ? TT.subject(s.subject_name, 30) : ""}</span></div>` : ""}</td>`;
+    }
+    h += "</tr>";
+  });
+  return h + "</tbody></table></section>";
+}
+
+function header(info, subtitle) {
+  return `<header class="ph">
     <div class="ph-logo">${info.school_logo ? `<img src="${esc(info.school_logo)}" alt="شعار المدرسة" />` : ""}</div>
     <div class="ph-title"><h1>جدول الحصص الأسبوعي</h1>${info.school_name ? `<div class="school">${esc(info.school_name)}</div>` : ""}${info.school_year ? `<div class="year">العام الدراسي ${esc(info.school_year)}</div>` : ""}</div>
     <div class="ph-meta"><span class="chip">${esc(subtitle)}</span></div></header>`;
-  h += `<table><thead><tr><th style="width:27mm"></th>${days.map((d) => `<th>${DAY_NAMES[d]}<span class="sh">${SHIFT_LABEL[shifts[d]] || ""}</span></th>`).join("")}</tr></thead><tbody>`;
-  for (let p = 1; p <= maxP; p++) {
-    h += `<tr style="height:${rowH}mm"><th class="lesson">${lessonName(p)}</th>`;
+}
+
+// كل المدرسة بورقة A3 واحدة: جدول مصغّر لكل صف
+function schoolSheet({ info, classes, schedule, dayPeriods, shifts }) {
+  const days = Object.keys(dayPeriods).map(Number).sort((a, b) => a - b);
+  const n = classes.length;
+  const cols = n <= 2 ? n || 1 : n <= 4 ? 2 : n <= 9 ? 3 : n <= 16 ? 4 : 5;
+  const rowsN = Math.ceil(n / cols);
+  const maxP = Math.max(...days.map((d) => dayPeriods[d].length), 0);
+  // معامل تكبير الخط: أقل صفوف → خط أكبر؛ أكثر دروس → خط أصغر
+  const showTime = n <= 8;
+  // معامل حجم الخط من أبعاد الخانة الفعلية على ورقة A3 (404×250مم تقريباً)
+  const cellW = ((404 - (cols - 1) * 5) / cols - 15) / Math.max(maxP, 1);
+  const cellH = ((250 - (rowsN - 1) * 5) / rowsN - 15) / Math.max(days.length, 1);
+  const k = Math.max(0.65, Math.min(1.9, Math.min(cellW / 14, cellH / (showTime ? 17 : 12))));
+  let h = `<section class="sheet a3">${header(info, `كل صفوف المدرسة (${n})`)}<div class="grid3" style="--cols:${cols};--rows:${rowsN};--k:${k.toFixed(2)}">`;
+  classes.forEach((c) => {
+    const rows = schedule.filter((s) => s.class_id === c.id);
+    const per = (d) => (c.periods_by_day && c.periods_by_day[d] != null ? c.periods_by_day[d] : dayPeriods[d].length);
+    h += `<div class="mini"><h3>${esc(c.name)}</h3><table><thead><tr><th class="corner"></th>${Array.from({ length: maxP }, (_, i) => `<th>${i + 1}</th>`).join("")}</tr></thead><tbody>`;
     days.forEach((d) => {
-      if (p > periodsOf(d)) { h += `<td class="off"></td>`; return; }
-      const pt = dayPeriods[d][p - 1];
-      const s = rows.find((r) => r.day_of_week === d && r.period_number === p);
-      h += `<td>${pt ? `<span class="t">${rng12(pt.start, pt.end)}</span>` : ""}${s ? `<div class="slot" style="--c:${esc(s.subject_color || "#1E3A4C")}"><b>${esc(s.subject_name)}</b><i>${mode === "teacher" ? "🏫" : "👤"} ${esc(mode === "teacher" ? s.class_name : s.teacher_name)}</i></div>` : ""}</td>`;
+      h += `<tr><th class="day">${DAY_NAMES[d]}</th>`;
+      for (let p = 1; p <= maxP; p++) {
+        if (p > per(d)) { h += `<td class="off"></td>`; continue; }
+        const pt = dayPeriods[d][p - 1], s = rows.find((r) => r.day_of_week === d && r.period_number === p);
+        h += `<td>${showTime ? pill(pt) : ""}${s ? `<div class="slot" style="--c:${esc(s.subject_color || "#1E3A4C")}"><b>${esc(s.subject_name)}</b><i>${esc(s.teacher_name)}</i></div>` : ""}</td>`;
+      }
+      h += "</tr>";
     });
-    h += "</tr>";
-  }
-  return h + "</tbody></table></section>";
+    h += "</tbody></table></div>";
+  });
+  return h + "</div></section>";
 }
 
 (async function () {
@@ -107,7 +169,11 @@ function sheet({ info, subtitle, rows, dayPeriods, shifts, mode, cls }) {
   const el = document.getElementById("sheets");
   if (!Array.isArray(classes) || !Array.isArray(schedule)) { el.innerHTML = '<p class="msg">الرابط غير صالح.</p>'; return; }
   const shifts = wd.shifts, out = [];
-  if (q.get("all")) {
+  if (q.get("school")) {
+    const st = document.createElement("style"); st.textContent = "@page { size: A3 landscape; margin: 8mm; }"; document.head.appendChild(st);
+    document.querySelector(".bar button").textContent = "🖨️ طباعة (A3 — كل المدرسة)";
+    out.push(schoolSheet({ info, classes, schedule, dayPeriods, shifts }));
+  } else if (q.get("all")) {
     classes.forEach((c) => out.push(sheet({ info, subtitle: `الصف: ${c.name}`, rows: schedule.filter((s) => s.class_id === c.id), dayPeriods, shifts, mode: "class", cls: c })));
   } else if (q.get("teacher_id")) {
     const t = teachers.find((x) => String(x.id) === q.get("teacher_id"));

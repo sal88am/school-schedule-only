@@ -595,8 +595,9 @@ const workDays = () => Object.keys(_dayPeriods).map(Number).sort((x, y) => x - y
 function slotHtml(s, perspective, editable, day, period) {
   const meta = perspective === "teacher" ? s.class_name : s.teacher_name;
   const handlers = editable ? `draggable="true" ondragstart="dragSlot(event, ${s.id})" onclick="openSlot(${day}, ${period}, ${s.id})"` : "";
-  return `<div class="slot" ${handlers} style="--slot-color:${esc(s.subject_color || "#2F4858")}">${s.lock_kind ? `<span class="pin" title="${s.lock_kind === "manual" ? "مثبّتة — لا تتغيّر عند إعادة التوليد" : "مثبّتة بقاعدة"}">📌</span>` : ""}<span class="subj">${esc(s.subject_name)}</span><span class="meta">${perspective === "teacher" ? "🏫" : "👤"} ${esc(meta)}</span></div>`;
+  return `<div class="slot" ${handlers} style="--slot-color:${esc(s.subject_color || "#2F4858")}">${s.lock_kind ? `<span class="pin" title="${s.lock_kind === "manual" ? "مثبّتة — لا تتغيّر عند إعادة التوليد" : "مثبّتة بقاعدة"}">📌</span>` : ""}<span class="s-txt"><span class="subj">${esc(s.subject_name)}</span><span class="meta">${esc(meta)}</span></span><span class="s-ico">${TT.subject(s.subject_name, 34)}</span></div>`;
 }
+const timePill = (pt) => (pt ? `<div class="cell-time">${TT.clock(13)}<span>${rng12(pt.start, pt.end)}</span></div>` : "");
 
 // جدول أسبوعي لصف أو معلم: الأعمدة = أيام الدوام، الصفوف = الدرس الأول، الثاني...
 function timetableHtml({ rows, cls, perspective, editable }) {
@@ -604,17 +605,17 @@ function timetableHtml({ rows, cls, perspective, editable }) {
   const periodsOf = (d) => (cls ? clsPeriods(cls, d) : _dayPeriods[d].length);
   const maxP = Math.max(0, ...days.map((d) => _dayPeriods[d].length));
   const at = (d, p) => rows.find((s) => s.day_of_week === d && s.period_number === p);
-  let h = `<table class="timetable"><thead><tr><th></th>${days.map((d) => `<th>${DAY_NAMES[d]}<span class="shift-tag">${esc(_dayShift[d] || "")}</span></th>`).join("")}</tr></thead><tbody>`;
-  for (let p = 1; p <= maxP; p++) {
-    h += `<tr><th class="period-cell">${lessonName(p)}</th>`;
-    days.forEach((d) => {
-      if (p > periodsOf(d)) { h += `<td class="off"></td>`; return; }
+  let h = `<table class="timetable tt-days"><thead><tr><th class="corner"></th>${Array.from({ length: maxP }, (_, i) => `<th><span class="th-name">${lessonName(i + 1)}</span><span class="th-ico">${TT.head(i + 1, 24)}</span></th>`).join("")}</tr></thead><tbody>`;
+  days.forEach((d) => {
+    h += `<tr><th class="period-cell day-cell"><span class="d-ico">${TT.calendar(28)}</span><span class="d-name">${DAY_NAMES[d]}</span><span class="shift-tag">${esc(_dayShift[d] || "")}</span></th>`;
+    for (let p = 1; p <= maxP; p++) {
+      if (p > periodsOf(d)) { h += `<td class="off"></td>`; continue; }
       const pt = _dayPeriods[d][p - 1], s = at(d, p);
       const drop = editable ? `ondragover="event.preventDefault()" ondrop="dropSlot(event, ${d}, ${p})"` : "";
-      h += `<td ${drop}>${pt ? `<div class="cell-time">${rng12(pt.start, pt.end)}</div>` : ""}${s ? slotHtml(s, perspective, editable, d, p) : editable ? `<button class="add-slot" onclick="openSlot(${d}, ${p})" title="إضافة حصة">＋</button>` : ""}</td>`;
-    });
+      h += `<td ${drop}>${timePill(pt)}${s ? slotHtml(s, perspective, editable, d, p) : editable ? `<button class="add-slot" onclick="openSlot(${d}, ${p})" title="إضافة حصة">＋</button>` : ""}</td>`;
+    }
     h += "</tr>";
-  }
+  });
   return h + "</tbody></table>";
 }
 
@@ -629,7 +630,7 @@ function mobileListHtml({ rows, cls, perspective, editable }) {
   let h = '<div class="lesson-list">';
   for (let p = 1; p <= n; p++) {
     const pt = _dayPeriods[mobileDay][p - 1], s = rows.find((x) => x.day_of_week === mobileDay && x.period_number === p);
-    h += `<div class="lesson-card"><div class="lesson-no">${lessonName(p)}${pt ? `<div class="cell-time">${rng12(pt.start, pt.end)}</div>` : ""}</div>
+    h += `<div class="lesson-card"><div class="lesson-no">${lessonName(p)}${timePill(pt)}</div>
       <div class="lesson-body">${s ? slotHtml(s, perspective, editable, mobileDay, p) : editable ? `<button class="add-slot" onclick="openSlot(${mobileDay}, ${p})">＋ إضافة حصة</button>` : '<span class="muted-text">— لا توجد حصة —</span>'}</div></div>`;
   }
   return h + "</div>";
@@ -741,6 +742,7 @@ function shareUrl(all) {
 }
 $("printBtn").addEventListener("click", () => window.open(shareUrl(false), "_blank"));
 $("printAllBtn").addEventListener("click", () => window.open(shareUrl(true), "_blank"));
+$("printSchoolBtn").addEventListener("click", () => window.open(`${location.origin}/print.html?s=${shareCode()}&school=1`, "_blank"));
 $("shareBtn").addEventListener("click", async () => {
   const url = shareUrl(false);
   try { await navigator.clipboard.writeText(url); $("shareResult").textContent = `تم نسخ الرابط: ${url}`; } catch (e) { $("shareResult").textContent = `الرابط: ${url}`; }
