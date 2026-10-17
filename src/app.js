@@ -35,6 +35,7 @@ app.use("/api/class-subjects", ...admin, require("./routes/classSubjects"));
 app.use("/api/teacher-assignments", ...admin, require("./routes/teacherAssignments"));
 app.use("/api/schedule-config", ...admin, require("./routes/scheduleConfig"));
 app.use("/api/settings", ...admin, require("./routes/settings"));
+app.use("/api/fixed-slots", ...admin, require("./routes/fixedSlots"));
 app.use("/api/schedule", ...admin, require("./routes/schedule"));
 app.use("/api/audit-logs", ...admin, require("./routes/auditLogs"));
 app.use("/api/users", ...admin, require("./routes/users"));

@@ -326,3 +326,26 @@ details summary { cursor: pointer; font-size: 14px; font-weight: 600; margin-top
 .lesson-no { flex: 0 0 98px; }
 .lesson-no .cell-time { white-space: nowrap; font-size: 10.5px; }
 @media (max-width: 900px) { .report-grid .rep:last-child { grid-column: 1 / -1; } }
+
+/* ===== v5: تثبيت، بدائل، اقتراحات، تعارض ===== */
+.slot { position: relative; }
+.slot .pin { position: absolute; top: 4px; left: 6px; font-size: 11px; opacity: .85; }
+.check-row { display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--text, #1F2D3A); }
+.check-row input { width: 18px; height: 18px; }
+.override-add { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #D6DDE5; }
+.override-add h4, #genPanel h4 { margin: 10px 0 8px; font-size: 14px; color: var(--brand); }
+.alt-list { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.alt-card { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: #F4F7FA; border: 1px solid #DCE3EA; border-radius: 12px; padding: 10px 12px; }
+.alt-card small { display: block; color: #5C6B7A; font-size: 12px; margin-top: 2px; }
+.sug-list { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 6px; }
+.sug-list li { background: #FBF7EE; border: 1px solid #EBDDBF; border-radius: 10px; padding: 8px 12px; font-size: 13.5px; line-height: 1.7; }
+.sug-list li.error { background: #FBEFEE; border-color: #EBC5C0; }
+.sug-list li.ok { background: #EEF7F1; border-color: #C8E1D0; }
+.conflict-msg { font-weight: 700; line-height: 1.8; margin: 0 0 8px; }
+.sug-btns { display: grid; gap: 8px; margin: 8px 0 12px; }
+.suggest-btn { text-align: right; justify-content: flex-start; background: #fff; border: 1.5px solid var(--accent); color: var(--brand); white-space: normal; line-height: 1.6; }
+.suggest-btn:hover { background: var(--accent-soft); }
+.suggest-btn.kind-swap { border-color: var(--brand); }
+.toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: #1E3A4C; color: #fff; padding: 12px 18px; border-radius: 12px; z-index: 80; max-width: min(92vw, 520px); font-size: 14px; line-height: 1.7; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+.toast.hidden { display: none; }
+@media (max-width: 820px) { .alt-list { grid-template-columns: 1fr; } }

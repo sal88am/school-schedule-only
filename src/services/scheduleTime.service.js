@@ -32,18 +32,51 @@ function getWorkingDays(sid) {
   const m = getDayShiftMap(sid);
   return Object.keys(m).map(Number).filter((d) => m[d]).sort((a, b) => a - b);
 }
-function getPeriodsPerDayForClass(sid, cls, day) {
+// تجاوزات عدد الدروس: صف+يوم > يوم لكل الصفوف > إعداد الصف العام > عدد دروس الشفت
+function getOverrides(sid) {
+  const byDay = {}, byClassDay = {};
+  db.prepare("SELECT * FROM period_overrides WHERE school_id = ?").all(sid).forEach((r) => {
+    if (r.class_id) byClassDay[`${r.class_id}-${r.day_of_week}`] = r.period_count;
+    else byDay[r.day_of_week] = r.period_count;
+  });
+  return { byDay, byClassDay };
+}
+// مُحلّل جاهز (يقرأ القاعدة مرة واحدة) — يُستعمل في التوليد والتقارير
+function periodsResolver(sid) {
+  const dayMap = getDayShiftMap(sid), ov = getOverrides(sid);
+  return (cls, day) => {
+    const shift = dayMap[day];
+    if (!shift) return 0;
+    return ov.byClassDay[`${cls.id}-${day}`] || ov.byDay[day] || cls.custom_periods_per_day || shift.period_count;
+  };
+}
+function getPeriodsPerDayForClass(sid, cls, day) { return periodsResolver(sid)(cls, day); }
+// أكبر عدد دروس في اليوم عبر كل الصفوف (عدد أعمدة/صفوف الجدول)
+function getDayMaxPeriods(sid, day) {
   const shift = getDayShiftMap(sid)[day];
   if (!shift) return 0;
-  return cls.custom_periods_per_day || shift.period_count;
+  const res = periodsResolver(sid);
+  const classes = db.prepare("SELECT * FROM school_classes WHERE school_id = ?").all(sid);
+  if (!classes.length) return res({ id: 0 }, day);
+  return Math.max(...classes.map((c) => res(c, day)));
 }
 function computeDayPeriods(sid, day, count) {
   const shift = getDayShiftMap(sid)[day];
-  return shift ? buildPeriods(shift, count) : [];
+  return shift ? buildPeriods(shift, count || getDayMaxPeriods(sid, day)) : [];
+}
+// عدد دروس كل صف في كل يوم دوام (للواجهة والطباعة)
+function classPeriodsMap(sid) {
+  const res = periodsResolver(sid), days = getWorkingDays(sid);
+  const out = {};
+  db.prepare("SELECT * FROM school_classes WHERE school_id = ?").all(sid).forEach((c) => {
+    out[c.id] = {};
+    days.forEach((d) => (out[c.id][d] = res(c, d)));
+  });
+  return out;
 }
 function getPeriodTime(sid, day, period) {
   const p = computeDayPeriods(sid, day, Math.max(period, 1)).find((x) => x.period === period);
   return p ? { start_time: p.start, end_time: p.end } : { start_time: null, end_time: null };
 }
 
-module.exports = { buildPeriods, getShifts, getDayShiftMap, getWorkingDays, getPeriodsPerDayForClass, computeDayPeriods, getPeriodTime, toMinutes, toTime };
+module.exports = { periodsResolver, getOverrides, getDayMaxPeriods, classPeriodsMap, buildPeriods, getShifts, getDayShiftMap, getWorkingDays, getPeriodsPerDayForClass, computeDayPeriods, getPeriodTime, toMinutes, toTime };

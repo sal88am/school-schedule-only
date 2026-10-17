@@ -146,3 +146,6 @@ module.exports.PALETTE = PALETTE;
 
 // ---------- Phase 9: تعدد المدارس (ترحيل آمن + أول مدرسة) ----------
 require("./migrations/multiTenant").run(db, ensureColumn, PALETTE);
+
+// ---------- v5: عدد دروس لكل يوم + دروس مثبتة ----------
+require("./migrations/scheduling").run(db, ensureColumn);

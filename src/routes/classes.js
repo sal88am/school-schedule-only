@@ -12,7 +12,8 @@ router.get("/", (req, res) => {
     const g = GRADES.indexOf(a.grade) - GRADES.indexOf(b.grade);
     return g || SECTION_LETTERS.indexOf(a.section) - SECTION_LETTERS.indexOf(b.section) || a.id - b.id;
   });
-  res.json(rows);
+  const pm = require("../services/scheduleTime.service").classPeriodsMap(req.schoolId);
+  res.json(rows.map((r) => ({ ...r, periods_by_day: pm[r.id] || {} })));
 });
 
 router.post("/generate", (req, res) => {

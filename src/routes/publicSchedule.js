@@ -21,7 +21,10 @@ router.get("/schedule", (req, res) => {
   // بيانات غير حساسة فقط (بدون هواتف أو حسابات)
   res.json(rows);
 });
-router.get("/classes", (req, res) => res.json(db.prepare("SELECT id, name, grade, section, custom_periods_per_day FROM school_classes WHERE school_id = ? ORDER BY id").all(req.schoolId)));
+router.get("/classes", (req, res) => {
+  const pm = svc.classPeriodsMap(req.schoolId);
+  res.json(db.prepare("SELECT id, name, grade, section, custom_periods_per_day FROM school_classes WHERE school_id = ? ORDER BY id").all(req.schoolId).map((c) => ({ ...c, periods_by_day: pm[c.id] || {} })));
+});
 router.get("/teachers", (req, res) => res.json(db.prepare("SELECT id, name FROM teachers WHERE school_id = ? ORDER BY name").all(req.schoolId)));
 router.get("/working-days", (req, res) => {
   const map = svc.getDayShiftMap(req.schoolId);

@@ -1,6 +1,6 @@
 
 function t12(t) { if (!t) return "—"; const [h, m] = String(t).split(":").map(Number); const s = h >= 12 ? "م" : "ص"; return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${s}`; }
-function rng12(a, b) { if (!a || !b) return ""; const x = t12(a), y = t12(b); const sx = x.slice(-1), sy = y.slice(-1); return sx === sy ? `${x.slice(0, -2)}–${y}` : `${x}–${y}`; }
+function rng12(a, b) { if (!a || !b) return ""; const x = t12(a), y = t12(b); const sx = x.slice(-1), sy = y.slice(-1); return "\u2066" + (sx === sy ? `${x.slice(0, -2)}–${y}` : `${x}–${y}`) + "\u2069"; }
 const DAY_NAMES = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -21,7 +21,7 @@ async function apiFetch(path, options = {}) {
   const res = await fetch(path, { ...options, headers });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && token && !path.startsWith("/api/auth/login")) { logoutLocal(); throw new Error("انتهت الجلسة"); }
-  if (!res.ok) throw new Error(data.error || "حدث خطأ غير متوقع");
+  if (!res.ok) { const err = new Error(data.error || "حدث خطأ غير متوقع"); err.data = data; throw err; }
   return data;
 }
 const post = (p, b) => apiFetch(p, { method: "POST", body: JSON.stringify(b || {}) });
@@ -360,7 +360,36 @@ async function loadShifts() {
   const map = Object.fromEntries(cfg.dayConfig.map((d) => [d.day_of_week, d.shift_type]));
   $("dayShiftGrid").innerHTML = DAY_NAMES.map((n, i) => `<label class="day-cell"><span>${n}</span>
     <select data-day="${i}"><option value="">عطلة</option>${cfg.shifts.map((s) => `<option value="${s.shift_type}" ${map[i] === s.shift_type ? "selected" : ""}>${esc(s.label)}</option>`).join("")}</select></label>`).join("");
+  await renderDayPeriods(cfg);
 }
+
+// ---------- عدد الدروس لكل يوم ----------
+async function renderDayPeriods(cfg) {
+  await loadLookups();
+  const shiftCount = Object.fromEntries(cfg.shifts.map((x) => [x.shift_type, x.period_count]));
+  const work = cfg.dayConfig.filter((d) => d.shift_type);
+  const allOv = Object.fromEntries(cfg.overrides.filter((o) => !o.class_id).map((o) => [o.day_of_week, o.period_count]));
+  $("dayPeriodsGrid").innerHTML = work.length ? work.map((d) => `<label class="day-cell"><span>${DAY_NAMES[d.day_of_week]}</span>
+    <input type="number" min="1" max="12" value="${allOv[d.day_of_week] ?? ""}" placeholder="${shiftCount[d.shift_type]}" onchange="saveDayPeriods(${d.day_of_week}, null, this.value)" /></label>`).join("")
+    : '<p class="muted-text">حدّد أيام الدوام أولاً ثم احفظها.</p>';
+  $("ovClass").innerHTML = opts(_classes, (c) => c.name);
+  $("ovDay").innerHTML = work.map((d) => `<option value="${d.day_of_week}">${DAY_NAMES[d.day_of_week]}</option>`).join("");
+  const rows = cfg.overrides.filter((o) => o.class_id);
+  $("overrideList").innerHTML = rows.length ? `<table><thead><tr><th>الصف</th><th>اليوم</th><th>عدد الدروس</th><th></th></tr></thead><tbody>${
+    rows.map((o) => `<tr><td>${esc(o.class_name)}</td><td>${DAY_NAMES[o.day_of_week]}</td><td>${o.period_count}</td><td><button class="btn btn-danger" onclick="saveDayPeriods(${o.day_of_week}, ${o.class_id}, '')">إلغاء</button></td></tr>`).join("")}</tbody></table>` : "";
+}
+async function saveDayPeriods(day, classId, value) {
+  try {
+    const r = await put("/api/schedule-config/day-periods", { day_of_week: day, class_id: classId, period_count: value === "" ? null : Number(value) });
+    $("dayPeriodsResult").textContent = r.outside ? `تم الحفظ — ${r.outside} حصة صارت خارج عدد الدروس الجديد، أعد توليد الجدول أو انقلها.` : "تم الحفظ ✅";
+    await renderDayPeriods(r);
+  } catch (e) { $("dayPeriodsResult").textContent = e.message; }
+}
+$("ovAddBtn").addEventListener("click", () => {
+  const v = $("ovCount").value;
+  if (!v) { $("dayPeriodsResult").textContent = "اكتب عدد الدروس"; return; }
+  saveDayPeriods(Number($("ovDay").value), Number($("ovClass").value), v);
+});
 async function saveShift(type) {
   const card = document.querySelector(`[data-shift="${type}"]`);
   const g = (n) => card.querySelector(`[name=${n}]`).value;
@@ -398,6 +427,7 @@ async function loadScheduleView() {
   f.day_of_week.innerHTML = DAY_NAMES.map((n, i) => `<option value="${i}">${n}</option>`).join("");
   fillFilterValues();
   await refreshSchedule();
+  await fillFixedForm();
 }
 function fillFilterValues() {
   const type = $("scheduleFilterType").value, sel = $("scheduleFilterValue"), day = $("scheduleDayFilter");
@@ -425,6 +455,7 @@ async function refreshSchedule() {
   $("unapproveBtn").classList.toggle("hidden", _status !== "approved");
   $("autoGenBtn").disabled = _status === "approved";
   $("manualCard").classList.toggle("hidden", _status === "approved");
+  $("fixedCard").classList.toggle("hidden", _status === "approved");
   renderReport(report); renderGrid();
 }
 function renderReport(r) {
@@ -442,14 +473,31 @@ function renderReport(r) {
       r.issues.map((i) => `<li class="${i.level}">${esc(i.message)}</li>`).join("")}</ul></details>` : '<p class="muted-text">لا توجد مشاكل ✅</p>'}`;
 }
 
-$("autoGenBtn").addEventListener("click", async () => {
-  if (!confirm("سيُستبدل الجدول الحالي بالكامل (بما فيه التعديلات اليدوية). متأكد؟")) return;
+function toast(msg, ms = 6000) {
+  const t = $("toast"); t.textContent = msg; t.classList.remove("hidden");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add("hidden"), ms);
+}
+const SUG_ICON = { error: "❌", warn: "⚠️", ok: "✅" };
+function renderGenPanel(r) {
+  const alts = (r.alternatives || []).map((a) => `<div class="alt-card"><div><b>توزيع بديل</b><small>الدرجة ${a.score}/100 · ${a.unfilled ? `${a.unfilled} ناقصة` : "مكتمل"} · يختلف ${a.diffPercent}% عن الحالي</small></div>
+    <button class="btn btn-ghost" onclick="applySeed(${a.seed})">تطبيق</button></div>`).join("");
+  const sug = (r.suggestions || []).map((x) => `<li class="${x.level}">${SUG_ICON[x.level] || "💡"} ${esc(x.text)}</li>`).join("");
+  $("genPanel").innerHTML = (alts ? `<h4>بدائل جاهزة</h4><div class="alt-list">${alts}</div>` : "") + (sug ? `<h4>اقتراحات</h4><ul class="sug-list">${sug}</ul>` : "");
+}
+async function runGenerate(seed) {
   $("autoGenResult").textContent = "جاري التوليد...";
   try {
-    const r = await post("/api/schedule/auto-generate");
-    $("autoGenResult").textContent = `تم جدولة ${r.filled} من ${r.required} حصة — الدرجة ${r.score}/100` + (r.unfilled ? ` — بقي ${r.unfilled} ناقصة، راجع المشاكل أدناه.` : " ✅");
-    refreshSchedule();
+    const r = await post("/api/schedule/auto-generate", seed ? { seed } : {});
+    $("autoGenResult").textContent = `تم جدولة ${r.filled} من ${r.required} حصة — الدرجة ${r.score}/100` + (r.unfilled ? ` — بقي ${r.unfilled} ناقصة` : " ✅")
+      + (r.diffPercent < 100 ? ` — اختلف ${r.diffPercent}% عن الجدول السابق` : "") + (r.keptManual ? ` — حُفظت ${r.keptManual} حصة مثبّتة 📌` : "");
+    renderGenPanel(r);
+    refreshSchedule(); loadFixed();
   } catch (e) { $("autoGenResult").textContent = `خطأ: ${e.message}`; }
+}
+function applySeed(seed) { runGenerate(seed); }
+$("autoGenBtn").addEventListener("click", async () => {
+  if (_schedule.length && !confirm("سيُنشأ توزيع جديد ويستبدل الجدول الحالي. الحصص والدروس المثبّتة 📌 تبقى كما هي. متأكد؟")) return;
+  runGenerate();
 });
 $("approveBtn").addEventListener("click", async () => {
   if (!confirm("اعتماد الجدول سيقفل التعديل عليه. متأكد؟")) return;
@@ -461,26 +509,88 @@ $("scheduleForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target); $("scheduleError").textContent = "";
   try {
-    await post("/api/schedule", { teacher_id: +fd.get("teacher_id"), class_id: +fd.get("class_id"), subject_id: +fd.get("subject_id"), day_of_week: +fd.get("day_of_week"), period_number: +fd.get("period_number") });
+    const r = await post("/api/schedule", { teacher_id: +fd.get("teacher_id"), class_id: +fd.get("class_id"), subject_id: +fd.get("subject_id"), day_of_week: +fd.get("day_of_week"), period_number: +fd.get("period_number") });
+    if (r.warnings && r.warnings.length) toast(r.warnings.join(" · "));
     refreshSchedule();
-  } catch (err) { $("scheduleError").textContent = err.message; }
+  } catch (err) { if (err.data && err.data.suggestions) showConflict(err); else $("scheduleError").textContent = err.message; }
+});
+
+// ---------- نافذة التعارض + الحلول المقترحة ----------
+let _sugg = [];
+function showConflict(err) {
+  const d = err.data || {};
+  _sugg = d.suggestions || [];
+  $("conflictBody").innerHTML = `${(d.conflicts || []).length ? `<ul class="issue-list">${d.conflicts.map((c) => `<li class="error">${esc(c.message)}</li>`).join("")}</ul>` : `<p class="conflict-msg">${esc(err.message)}</p>`}
+    ${_sugg.length ? `<h4>حلول مقترحة (اضغط لتطبيق الحل)</h4><div class="sug-btns">${_sugg.map((x, i) => `<button class="btn suggest-btn kind-${x.kind}" onclick="applySuggestion(${i})">${x.kind === "swap" ? "🔁" : x.kind === "teacher" ? "👤" : x.kind === "replace" ? "♻️" : "➡️"} ${esc(x.label)}</button>`).join("")}</div>`
+      : '<p class="muted-text">لا توجد حلول تلقائية — جرّب خانة أخرى أو معلماً آخر.</p>'}
+    <p id="conflictErr" class="error-text"></p>`;
+  $("slotModal").classList.add("hidden");
+  $("conflictModal").classList.remove("hidden");
+}
+async function applySuggestion(i) {
+  const x = _sugg[i]; if (!x) return;
+  try {
+    const r = await apiFetch(x.apply.url, { method: x.apply.method, body: JSON.stringify(x.apply.body) });
+    $("conflictModal").classList.add("hidden");
+    if (r && r.warnings && r.warnings.length) toast(r.warnings.join(" · ")); else toast("تم تطبيق الحل ✅", 3000);
+    refreshSchedule();
+  } catch (err) { $("conflictErr").textContent = err.message; }
+}
+$("conflictClose").addEventListener("click", () => $("conflictModal").classList.add("hidden"));
+
+// ---------- الدروس المثبتة ----------
+async function fillFixedForm() {
+  const f = $("fixedForm");
+  f.class_id.innerHTML = `<option value="">كل الصفوف</option>` + opts(_classes, (c) => c.name);
+  f.day_of_week.innerHTML = workDays().map((d) => `<option value="${d}">${DAY_NAMES[d]}</option>`).join("");
+  f.period_number.innerHTML = `<option value="0">الدرس الأخير</option>` + Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}">${lessonName(i + 1)}</option>`).join("");
+  f.subject_id.innerHTML = opts(_subjects, (x) => x.name);
+  f.teacher_id.innerHTML = `<option value="">أي معلم مرتبط بالمادة</option>` + opts(_teachers, (x) => x.name);
+  await loadFixed();
+}
+async function loadFixed() {
+  const rows = await apiFetch("/api/fixed-slots");
+  $("fixedList").innerHTML = rows.length ? `<table><thead><tr><th>الصف</th><th>اليوم</th><th>الدرس</th><th>المادة</th><th>المعلم</th><th></th></tr></thead><tbody>${
+    rows.map((r) => `<tr><td>${esc(r.class_name || "كل الصفوف")}</td><td>${DAY_NAMES[r.day_of_week]}</td><td>${r.period_number ? lessonName(r.period_number) : "الدرس الأخير"}</td><td>${esc(r.subject_name)}</td><td>${esc(r.teacher_name || "أي معلم مرتبط")}</td><td><button class="btn btn-danger" onclick="removeFixed(${r.id})">حذف</button></td></tr>`).join("")}</tbody></table>`
+    : '<p class="muted-text">لا توجد دروس مثبتة.</p>';
+}
+async function removeFixed(id) { await del(`/api/fixed-slots/${id}`); await loadFixed(); refreshSchedule(); }
+$("fixedForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  try {
+    const r = await post("/api/fixed-slots", { class_id: fd.get("class_id") || null, day_of_week: +fd.get("day_of_week"), period_number: +fd.get("period_number"), subject_id: +fd.get("subject_id"), teacher_id: fd.get("teacher_id") || null });
+    $("fixedMsg").textContent = r.warning || "تمت الإضافة — يُطبَّق عند التوليد، أو اضغط «تطبيق التثبيتات على الجدول الحالي».";
+    await loadFixed();
+  } catch (err) { $("fixedMsg").textContent = err.message; }
+});
+$("fixedApplyBtn").addEventListener("click", async () => {
+  if (_status === "approved") { $("fixedMsg").textContent = "الجدول معتمد — افتح التعديل أولاً"; return; }
+  if (!confirm("سيُوضع كل درس مثبّت بخانته، وقد يستبدل حصة موجودة هناك. متأكد؟")) return;
+  try {
+    const r = await post("/api/fixed-slots/apply");
+    $("fixedMsg").textContent = `وُضع ${r.placed} درس${r.replaced ? `، واستُبدلت ${r.replaced} حصة (أعد التوليد لتعويضها)` : ""}.` + (r.skipped.length ? ` تعذّر: ${r.skipped.join("؛ ")}` : "");
+    refreshSchedule();
+  } catch (err) { $("fixedMsg").textContent = err.message; }
 });
 
 function currentFilter() { return { type: $("scheduleFilterType").value, value: $("scheduleFilterValue").value }; }
 
+// عدد دروس صف في يوم (يراعي التخصيصات)، وإلا عدد أعمدة اليوم
+const clsPeriods = (cls, d) => (cls && cls.periods_by_day && cls.periods_by_day[d] != null ? cls.periods_by_day[d] : (_dayPeriods[d] || []).length);
 const workDays = () => Object.keys(_dayPeriods).map(Number).sort((x, y) => x - y);
 
 function slotHtml(s, perspective, editable, day, period) {
   const meta = perspective === "teacher" ? s.class_name : s.teacher_name;
   const handlers = editable ? `draggable="true" ondragstart="dragSlot(event, ${s.id})" onclick="openSlot(${day}, ${period}, ${s.id})"` : "";
-  return `<div class="slot" ${handlers} style="--slot-color:${esc(s.subject_color || "#2F4858")}"><span class="subj">${esc(s.subject_name)}</span><span class="meta">${esc(meta)}</span></div>`;
+  return `<div class="slot" ${handlers} style="--slot-color:${esc(s.subject_color || "#2F4858")}">${s.lock_kind ? `<span class="pin" title="${s.lock_kind === "manual" ? "مثبّتة — لا تتغيّر عند إعادة التوليد" : "مثبّتة بقاعدة"}">📌</span>` : ""}<span class="subj">${esc(s.subject_name)}</span><span class="meta">${esc(meta)}</span></div>`;
 }
 
 // جدول أسبوعي لصف أو معلم: الأعمدة = أيام الدوام، الصفوف = الدرس الأول، الثاني...
 function timetableHtml({ rows, cls, perspective, editable }) {
   const days = workDays();
-  const periodsOf = (d) => (cls && cls.custom_periods_per_day ? cls.custom_periods_per_day : _dayPeriods[d].length);
-  const maxP = Math.max(0, ...days.map(periodsOf));
+  const periodsOf = (d) => (cls ? clsPeriods(cls, d) : _dayPeriods[d].length);
+  const maxP = Math.max(0, ...days.map((d) => _dayPeriods[d].length));
   const at = (d, p) => rows.find((s) => s.day_of_week === d && s.period_number === p);
   let h = `<table class="timetable"><thead><tr><th></th>${days.map((d) => `<th>${DAY_NAMES[d]}<span class="shift-tag">${esc(_dayShift[d] || "")}</span></th>`).join("")}</tr></thead><tbody>`;
   for (let p = 1; p <= maxP; p++) {
@@ -503,7 +613,7 @@ function mobileListHtml({ rows, cls, perspective, editable }) {
   if (mobileDay === null || !days.includes(mobileDay)) { const t = new Date().getDay(); mobileDay = days.includes(t) ? t : days[0]; }
   $("dayTabs").classList.remove("hidden");
   $("dayTabs").innerHTML = days.map((d) => `<button class="day-tab ${d === mobileDay ? "active" : ""}" onclick="setMobileDay(${d})">${DAY_NAMES[d]}<small>${esc(_dayShift[d] || "")}</small></button>`).join("");
-  const n = cls && cls.custom_periods_per_day ? cls.custom_periods_per_day : _dayPeriods[mobileDay].length;
+  const n = cls ? clsPeriods(cls, mobileDay) : _dayPeriods[mobileDay].length;
   let h = '<div class="lesson-list">';
   for (let p = 1; p <= n; p++) {
     const pt = _dayPeriods[mobileDay][p - 1], s = rows.find((x) => x.day_of_week === mobileDay && x.period_number === p);
@@ -523,10 +633,10 @@ function allClassesHtml() {
   }
   const d = Number(day);
   if (!_dayPeriods[d]) return "";
-  const maxP = Math.max(..._classes.map((c) => (c.custom_periods_per_day || _dayPeriods[d].length)));
+  const maxP = _dayPeriods[d].length;
   let h = `<table class="timetable matrix"><thead><tr><th>الصف</th>${Array.from({ length: maxP }, (_, i) => `<th>${lessonName(i + 1)}<span class="shift-tag mono">${_dayPeriods[d][i] ? `${rng12(_dayPeriods[d][i].start, _dayPeriods[d][i].end)}` : ""}</span></th>`).join("")}</tr></thead><tbody>`;
   _classes.forEach((c) => {
-    const n = c.custom_periods_per_day || _dayPeriods[d].length;
+    const n = clsPeriods(c, d);
     h += `<tr><th class="period-cell class-cell">${esc(c.name)}</th>`;
     for (let p = 1; p <= maxP; p++) {
       const s = _schedule.find((x) => x.class_id === c.id && x.day_of_week === d && x.period_number === p);
@@ -564,10 +674,12 @@ async function dropSlot(e, day, period) {
   dragId = null;
   try {
     if (target && target.id === src.id) return;
-    if (target) await post("/api/schedule/swap", { a: src.id, b: target.id });
-    else await put(`/api/schedule/${src.id}`, { day_of_week: day, period_number: period });
+    let r;
+    if (target) r = await post("/api/schedule/swap", { a: src.id, b: target.id });
+    else r = await put(`/api/schedule/${src.id}`, { day_of_week: day, period_number: period });
+    if (r && r.warnings && r.warnings.length) toast(r.warnings.join(" · "));
     refreshSchedule();
-  } catch (err) { alert(err.message); }
+  } catch (err) { if (err.data && (err.data.suggestions || err.data.conflicts)) showConflict(err); else toast(err.message); }
 }
 
 // نافذة تعديل/إضافة حصة
@@ -579,6 +691,12 @@ function openSlot(day, period, id) {
   const f = $("slotForm");
   f.subject_id.innerHTML = opts(_subjects, (x) => x.name, s ? s.subject_id : "");
   f.teacher_id.innerHTML = opts(_teachers, (x) => x.name, s ? s.teacher_id : "");
+  f.pinned.checked = !!(s && s.lock_kind);
+  $("slotMoveRow").classList.toggle("hidden", !id);
+  if (id) {
+    f.day_of_week.innerHTML = workDays().map((d) => `<option value="${d}" ${d === day ? "selected" : ""}>${DAY_NAMES[d]}</option>`).join("");
+    f.period_number.innerHTML = Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}" ${i + 1 === period ? "selected" : ""}>${lessonName(i + 1)}</option>`).join("");
+  }
   $("slotModalTitle").textContent = `${DAY_NAMES[day]} — الحصة ${period}`;
   $("slotDeleteBtn").classList.toggle("hidden", !id);
   $("slotError").textContent = "";
@@ -588,12 +706,14 @@ $("slotCancelBtn").addEventListener("click", () => $("slotModal").classList.add(
 $("slotForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
-  const body = { subject_id: +fd.get("subject_id"), teacher_id: +fd.get("teacher_id") };
+  const body = { subject_id: +fd.get("subject_id"), teacher_id: +fd.get("teacher_id"), pinned: fd.get("pinned") === "on" };
+  if (slotCtx.id) { body.day_of_week = +fd.get("day_of_week"); body.period_number = +fd.get("period_number"); }
   try {
-    if (slotCtx.id) await put(`/api/schedule/${slotCtx.id}`, body);
-    else await post("/api/schedule", { ...body, class_id: slotCtx.class_id, day_of_week: slotCtx.day, period_number: slotCtx.period });
+    const r = slotCtx.id ? await put(`/api/schedule/${slotCtx.id}`, body)
+      : await post("/api/schedule", { ...body, class_id: slotCtx.class_id, day_of_week: slotCtx.day, period_number: slotCtx.period });
+    if (r.warnings && r.warnings.length) toast(r.warnings.join(" · "));
     $("slotModal").classList.add("hidden"); refreshSchedule();
-  } catch (err) { $("slotError").textContent = err.message; }
+  } catch (err) { if (err.data && err.data.suggestions) showConflict(err); else $("slotError").textContent = err.message; }
 });
 $("slotDeleteBtn").addEventListener("click", async () => {
   try { await del(`/api/schedule/${slotCtx.id}`); $("slotModal").classList.add("hidden"); refreshSchedule(); } catch (err) { $("slotError").textContent = err.message; }

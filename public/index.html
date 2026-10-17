@@ -263,6 +263,21 @@
         <button class="btn btn-accent" id="saveDaysBtn" type="button">حفظ الأيام</button>
         <p id="daysResult" class="muted-text"></p>
       </div>
+      <div class="card">
+        <h3>عدد الدروس لكل يوم</h3>
+        <p class="muted-text">اترك الخانة فارغة لاستعمال عدد دروس الدوام. اكتب رقماً لتحديد عدد دروس ذلك اليوم لكل الصفوف، أو خصّص صفاً واحداً من الأسفل.</p>
+        <div id="dayPeriodsGrid" class="day-shift-grid"></div>
+        <div class="override-add">
+          <h4>تخصيص صف واحد</h4>
+          <div class="form-row">
+            <select id="ovClass"></select><select id="ovDay"></select>
+            <input id="ovCount" type="number" min="1" max="12" placeholder="عدد الدروس" style="width:120px" />
+            <button class="btn btn-accent" id="ovAddBtn" type="button">حفظ</button>
+          </div>
+        </div>
+        <div id="overrideList"></div>
+        <p id="dayPeriodsResult" class="muted-text"></p>
+      </div>
     </section>
 
     <!-- الجدول الدراسي -->
@@ -276,13 +291,30 @@
         <div class="schedule-toolbar">
           <h3>الحالة: <span id="statusBadge" class="status-badge"></span></h3>
           <div class="schedule-controls">
-            <button class="btn btn-primary" id="autoGenBtn">⚡ توليد الجدول تلقائياً</button>
+            <button class="btn btn-primary" id="autoGenBtn">🔀 توليد توزيع جديد</button>
             <button class="btn btn-accent" id="approveBtn">✔ اعتماد الجدول</button>
             <button class="btn btn-ghost hidden" id="unapproveBtn">🔓 فتح التعديل</button>
           </div>
         </div>
         <p id="autoGenResult" class="muted-text"></p>
+        <div id="genPanel"></div>
         <div id="validationReport"></div>
+      </div>
+
+      <div class="card" id="fixedCard">
+        <h3>📌 دروس مثبتة</h3>
+        <p class="muted-text">ثبّت درساً محدداً (مثل «الدرس الأخير» يوم معيّن بمعلم معيّن). يُحترم عند كل توليد، ويمكنك أيضاً تثبيت أي حصة من الجدول بالضغط عليها واختيار «تثبيت».</p>
+        <form id="fixedForm" class="form-row">
+          <select name="class_id"></select>
+          <select name="day_of_week"></select>
+          <select name="period_number"></select>
+          <select name="subject_id"></select>
+          <select name="teacher_id"></select>
+          <button class="btn btn-accent" type="submit">+ إضافة تثبيت</button>
+        </form>
+        <p id="fixedMsg" class="muted-text"></p>
+        <div id="fixedList"></div>
+        <button class="btn btn-ghost" id="fixedApplyBtn" type="button">تطبيق التثبيتات على الجدول الحالي</button>
       </div>
 
       <div class="card" id="manualCard">
@@ -355,6 +387,11 @@
     <form id="slotForm" class="form-col">
       <label class="field-label">المادة</label><select name="subject_id"></select>
       <label class="field-label">المعلم</label><select name="teacher_id"></select>
+      <div id="slotMoveRow" class="hidden">
+        <label class="field-label">نقل إلى (اختياري)</label>
+        <div class="form-row"><select name="day_of_week"></select><select name="period_number"></select></div>
+      </div>
+      <label class="check-row"><input type="checkbox" name="pinned" /> 📌 تثبيت هذه الحصة (لا تتغيّر عند إعادة التوليد)</label>
       <p id="slotError" class="error-text"></p>
       <div class="form-row">
         <button class="btn btn-accent" type="submit">حفظ</button>
@@ -364,6 +401,14 @@
     </form>
   </div>
 </div>
+<div id="conflictModal" class="modal hidden">
+  <div class="modal-card modal-wide">
+    <h3>⚠️ يوجد تعارض</h3>
+    <div id="conflictBody"></div>
+    <div class="form-row"><button class="btn btn-ghost" type="button" id="conflictClose">إلغاء</button></div>
+  </div>
+</div>
+<div id="toast" class="toast hidden"></div>
 <div id="pwModal" class="modal hidden">
   <div class="modal-card modal-wide">
     <h3>تغيير كلمة المرور</h3>
