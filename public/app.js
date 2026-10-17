@@ -1,3 +1,6 @@
+
+function t12(t) { if (!t) return "—"; const [h, m] = String(t).split(":").map(Number); const s = h >= 12 ? "م" : "ص"; return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${s}`; }
+function rng12(a, b) { if (!a || !b) return ""; const x = t12(a), y = t12(b); const sx = x.slice(-1), sy = y.slice(-1); return sx === sy ? `${x.slice(0, -2)}–${y}` : `${x}–${y}`; }
 const DAY_NAMES = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -137,7 +140,7 @@ async function loadMySchedule() {
     h += `<tr><th class="period-cell">${lessonName(p)}</th>`;
     days.forEach((d) => {
       const pt = data.day_periods[d][p - 1]; const r = at(d, p);
-      h += `<td>${pt ? `<div class="cell-time">${pt.start}–${pt.end}</div>` : ""}${r ? `<div class="slot" style="--slot-color:#2F4858"><span class="subj">${esc(r.subject_name)}</span><span class="meta">${esc(r.class_name)}</span></div>` : ""}</td>`;
+      h += `<td>${pt ? `<div class="cell-time">${rng12(pt.start, pt.end)}</div>` : ""}${r ? `<div class="slot" style="--slot-color:#2F4858"><span class="subj">${esc(r.subject_name)}</span><span class="meta">${esc(r.class_name)}</span></div>` : ""}</td>`;
     });
     h += "</tr>";
   }
@@ -159,7 +162,7 @@ async function loadDashboard() {
   const today = new Date().getDay();
   const rows = schedule.filter((s) => s.day_of_week === today).sort((a, b) => a.period_number - b.period_number || a.class_name.localeCompare(b.class_name));
   $("todaySchedule").innerHTML = `<table><thead><tr><th>الحصة</th><th>الوقت</th><th>المادة</th><th>الصف</th><th>المعلم</th></tr></thead><tbody>${
-    rows.map((r) => `<tr><td>${r.period_number}</td><td class="mono">${r.start_time || "—"}</td><td>${esc(r.subject_name)}</td><td>${esc(r.class_name)}</td><td>${esc(r.teacher_name)}</td></tr>`).join("") || emptyRow(5)}</tbody></table>`;
+    rows.map((r) => `<tr><td>${r.period_number}</td><td class="mono">${t12(r.start_time)}</td><td>${esc(r.subject_name)}</td><td>${esc(r.class_name)}</td><td>${esc(r.teacher_name)}</td></tr>`).join("") || emptyRow(5)}</tbody></table>`;
 }
 const statusLabel = (s) => (s === "approved" ? "معتمد" : "مسودة");
 
@@ -352,7 +355,7 @@ async function loadShifts() {
       <button class="btn btn-accent" onclick="saveShift('${s.shift_type}')">حفظ</button>
       <p class="muted-text shift-msg"></p>
     </div>
-    <div class="shift-preview">${cfg.preview[s.shift_type].map((p) => `<div><span class="period-tab sm">${p.period}</span><span class="mono">${p.start} – ${p.end}</span></div>`).join("")}</div>
+    <div class="shift-preview">${cfg.preview[s.shift_type].map((p) => `<div><span class="period-tab sm">${p.period}</span><span class="mono">${rng12(p.start, p.end)}</span></div>`).join("")}</div>
   </div>`).join("");
   const map = Object.fromEntries(cfg.dayConfig.map((d) => [d.day_of_week, d.shift_type]));
   $("dayShiftGrid").innerHTML = DAY_NAMES.map((n, i) => `<label class="day-cell"><span>${n}</span>
@@ -486,7 +489,7 @@ function timetableHtml({ rows, cls, perspective, editable }) {
       if (p > periodsOf(d)) { h += `<td class="off"></td>`; return; }
       const pt = _dayPeriods[d][p - 1], s = at(d, p);
       const drop = editable ? `ondragover="event.preventDefault()" ondrop="dropSlot(event, ${d}, ${p})"` : "";
-      h += `<td ${drop}>${pt ? `<div class="cell-time">${pt.start}–${pt.end}</div>` : ""}${s ? slotHtml(s, perspective, editable, d, p) : editable ? `<button class="add-slot" onclick="openSlot(${d}, ${p})" title="إضافة حصة">＋</button>` : ""}</td>`;
+      h += `<td ${drop}>${pt ? `<div class="cell-time">${rng12(pt.start, pt.end)}</div>` : ""}${s ? slotHtml(s, perspective, editable, d, p) : editable ? `<button class="add-slot" onclick="openSlot(${d}, ${p})" title="إضافة حصة">＋</button>` : ""}</td>`;
     });
     h += "</tr>";
   }
@@ -504,7 +507,7 @@ function mobileListHtml({ rows, cls, perspective, editable }) {
   let h = '<div class="lesson-list">';
   for (let p = 1; p <= n; p++) {
     const pt = _dayPeriods[mobileDay][p - 1], s = rows.find((x) => x.day_of_week === mobileDay && x.period_number === p);
-    h += `<div class="lesson-card"><div class="lesson-no">${lessonName(p)}${pt ? `<div class="cell-time">${pt.start}–${pt.end}</div>` : ""}</div>
+    h += `<div class="lesson-card"><div class="lesson-no">${lessonName(p)}${pt ? `<div class="cell-time">${rng12(pt.start, pt.end)}</div>` : ""}</div>
       <div class="lesson-body">${s ? slotHtml(s, perspective, editable, mobileDay, p) : editable ? `<button class="add-slot" onclick="openSlot(${mobileDay}, ${p})">＋ إضافة حصة</button>` : '<span class="muted-text">— لا توجد حصة —</span>'}</div></div>`;
   }
   return h + "</div>";
@@ -521,7 +524,7 @@ function allClassesHtml() {
   const d = Number(day);
   if (!_dayPeriods[d]) return "";
   const maxP = Math.max(..._classes.map((c) => (c.custom_periods_per_day || _dayPeriods[d].length)));
-  let h = `<table class="timetable matrix"><thead><tr><th>الصف</th>${Array.from({ length: maxP }, (_, i) => `<th>${lessonName(i + 1)}<span class="shift-tag mono">${_dayPeriods[d][i] ? `${_dayPeriods[d][i].start}–${_dayPeriods[d][i].end}` : ""}</span></th>`).join("")}</tr></thead><tbody>`;
+  let h = `<table class="timetable matrix"><thead><tr><th>الصف</th>${Array.from({ length: maxP }, (_, i) => `<th>${lessonName(i + 1)}<span class="shift-tag mono">${_dayPeriods[d][i] ? `${rng12(_dayPeriods[d][i].start, _dayPeriods[d][i].end)}` : ""}</span></th>`).join("")}</tr></thead><tbody>`;
   _classes.forEach((c) => {
     const n = c.custom_periods_per_day || _dayPeriods[d].length;
     h += `<tr><th class="period-cell class-cell">${esc(c.name)}</th>`;

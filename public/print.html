@@ -60,6 +60,9 @@
   <div id="sheets"></div>
 
 <script>
+function t12(t) { if (!t) return "—"; const [h, m] = String(t).split(":").map(Number); const s = h >= 12 ? "م" : "ص"; return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${s}`; }
+function rng12(a, b) { if (!a || !b) return ""; const x = t12(a), y = t12(b); const sx = x.slice(-1), sy = y.slice(-1); return sx === sy ? `${x.slice(0, -2)}–${y}` : `${x}–${y}`; }
+
 const DAY_NAMES = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const SHIFT_LABEL = { morning: "صباحي", evening: "مسائي" };
 const ORD = ["الأول", "الثاني", "الثالث", "الرابع", "الخامس", "السادس", "السابع", "الثامن", "التاسع", "العاشر", "الحادي عشر", "الثاني عشر"];
@@ -84,7 +87,7 @@ function sheet({ info, subtitle, rows, dayPeriods, shifts, mode, cls }) {
       if (p > periodsOf(d)) { h += `<td class="off"></td>`; return; }
       const pt = dayPeriods[d][p - 1];
       const s = rows.find((r) => r.day_of_week === d && r.period_number === p);
-      h += `<td>${pt ? `<span class="t">${pt.start}–${pt.end}</span>` : ""}${s ? `<div class="slot" style="--c:${esc(s.subject_color || "#1E3A4C")}"><b>${esc(s.subject_name)}</b><i>${esc(mode === "teacher" ? s.class_name : s.teacher_name)}</i></div>` : ""}</td>`;
+      h += `<td>${pt ? `<span class="t">${rng12(pt.start, pt.end)}</span>` : ""}${s ? `<div class="slot" style="--c:${esc(s.subject_color || "#1E3A4C")}"><b>${esc(s.subject_name)}</b><i>${esc(mode === "teacher" ? s.class_name : s.teacher_name)}</i></div>` : ""}</td>`;
     });
     h += "</tr>";
   }
