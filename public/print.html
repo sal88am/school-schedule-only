@@ -47,21 +47,24 @@
   .dense .slot { padding: 3px 7px; border-radius: 7px; border-inline-start-width: 4px; } .dense .slot b { font-size: 12.5px; } .dense .slot i { font-size: 10.5px; } .dense .slot .si svg { width: 20px; height: 20px; }
   .dense .t { font-size: 9px; padding: 0 6px; margin-bottom: 2px; }
 
-  /* ===== A3: كل المدرسة بورقة واحدة ===== */
-  .sheet.a3 { width: 420mm; min-height: 297mm; padding: 8mm; }
-  .a3 .ph { padding-bottom: 6px; margin-bottom: 8px; } .a3 .ph-title h1 { font-size: 26px; } .a3 .ph-logo img { max-height: 24mm; }
-  .grid3 { flex: 1; display: grid; gap: 5mm; grid-template-columns: repeat(var(--cols), 1fr); grid-template-rows: repeat(var(--rows), minmax(0, 1fr)); min-height: 0; }
-  .mini { display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
-  .mini h3 { margin: 0; background: var(--brand); color: #fff; font: 800 calc(13px * var(--k)) "Cairo", sans-serif; padding: 3px 10px; border-bottom: 3px solid var(--accent); text-align: center; }
-  .mini table { border: 0; border-radius: 0; flex: 1; height: 100%; }
-  .mini thead th { font-size: calc(9.5px * var(--k)); padding: 2px 1px; border-bottom: 2px solid var(--accent); }
-  .mini thead th.corner, .mini th.day { width: calc(15mm * var(--k)); }
-  .mini th.day { font-size: calc(10.5px * var(--k)); padding: 1px; } .mini th.day .sh { font-size: calc(7px * var(--k)); }
-  .mini td { padding: 1.2px; }
-  .mini .slot { display: block; padding: 1.5px 3px; border-radius: 4px; border-inline-start-width: 2.5px; height: 100%; }
-  .mini .slot b { font-size: calc(10px * var(--k)); line-height: 1.2; } .mini .slot i { font-size: calc(8px * var(--k)); line-height: 1.2; }
-  .mini .t { font-size: calc(6.5px * var(--k)); padding: 0 4px; margin: 0 0 1px; border-radius: 4px; box-shadow: none; }
-  .mini .slot .si { display: none; }
+  /* ===== A3: كل المدرسة — الأيام صفوف، داخل كل يوم الدروس صفوف والشعب أعمدة ===== */
+  .sheet.a3 { padding: 8mm; }
+  .sheet.a3l { width: 420mm; min-height: 297mm; } .sheet.a3p { width: 297mm; min-height: 420mm; }
+  .a3 .ph { padding-bottom: 6px; margin-bottom: 6px; } .a3 .ph-title h1 { font-size: 26px; } .a3 .ph-logo img { max-height: 22mm; }
+  .big { flex: 1; height: 100%; table-layout: fixed; border-radius: 10px; }
+  .big thead th { font-size: var(--fh); padding: 4px 2px; }
+  .big thead th.corner { width: 17mm; } .big thead th.corner2 { width: 27mm; }
+  .big th.dayv { width: 17mm; background: #EAF1F8; color: var(--brand); font: 800 var(--fd) "Cairo", sans-serif; text-align: center; border-top: 3px solid var(--brand); border-inline-start: 1px solid var(--line); }
+  .big th.dayv .ic { display: block; line-height: 0; margin: 0 auto 3px; color: #1F4A66; }
+  .big th.dayv .sh { display: block; font: 500 9px "IBM Plex Sans Arabic", sans-serif; color: var(--muted); }
+  .big th.lsn { width: 27mm; background: #F4F6F9; color: var(--brand); font: 700 var(--fl) "Cairo", sans-serif; text-align: center; border-top: 1px solid var(--line); border-inline-start: 1px solid var(--line); padding: 1px 2px; line-height: 1.25; }
+  .big th.lsn .tm { display: block; direction: ltr; unicode-bidi: isolate; font: 700 var(--ft) "JetBrains Mono", monospace; color: #34495A; margin-top: 1px; }
+  .big tr.first th, .big tr.first td { border-top: 3px solid var(--brand); }
+  .big td { padding: 1.5px 2px; border-top: 1px solid var(--line); }
+  .big .slot { height: 100%; padding: 1px 6px; gap: 5px; border-radius: 6px; border-inline-start-width: 4px; }
+  .big .slot b { font-size: var(--fs); line-height: 1.15; } .big .slot i { font-size: var(--ft2); line-height: 1.15; }
+  .big .slot .si svg { width: var(--ic); height: var(--ic); }
+  .big.noic .slot .si { display: none; }
   .foot { margin-top: 6px; display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); }
   .msg { text-align: center; padding: 60px; color: var(--muted); }
 
@@ -69,11 +72,12 @@
     body { background: #fff; }
     .bar { display: none; }
     .sheet { width: auto; min-height: 0; height: 184mm; margin: 0; padding: 0; box-shadow: none; page-break-after: always; break-after: page; }
-    .sheet.a3 { height: 276mm; min-height: 0; width: auto; }
+    .sheet.a3 { padding: 0; min-height: 0; width: auto; }
+    .sheet.a3l { height: 276mm; } .sheet.a3p { height: 398mm; }
     .sheet:last-child { page-break-after: auto; break-after: auto; }
   }
-  @media (max-width: 1100px) { .sheet { zoom: .55; margin: 8px auto; } .sheet.a3 { zoom: .4; } }
-  @media (max-width: 700px) { .sheet { zoom: .34; } .sheet.a3 { zoom: .22; } }
+  @media (max-width: 1100px) { .sheet { zoom: .55; margin: 8px auto; } .sheet.a3l { zoom: .4; } .sheet.a3p { zoom: .5; } }
+  @media (max-width: 700px) { .sheet { zoom: .34; } .sheet.a3l { zoom: .22; } .sheet.a3p { zoom: .3; } }
   @media print { .sheet { zoom: 1 !important; } }
 </style>
 </head>
@@ -128,36 +132,39 @@ function header(info, subtitle) {
     <div class="ph-meta"><span class="chip">${esc(subtitle)}</span></div></header>`;
 }
 
-// كل المدرسة بورقة A3 واحدة: جدول مصغّر لكل صف
+// كل المدرسة بورقة A3 واحدة: الأيام صفوف، داخل كل يوم الدروس صفوف والشعب أعمدة
 function schoolSheet({ info, classes, schedule, dayPeriods, shifts }) {
   const days = Object.keys(dayPeriods).map(Number).sort((a, b) => a - b);
-  const n = classes.length;
-  const cols = n <= 2 ? n || 1 : n <= 4 ? 2 : n <= 9 ? 3 : n <= 16 ? 4 : 5;
-  const rowsN = Math.ceil(n / cols);
+  const n = classes.length || 1;
   const maxP = Math.max(...days.map((d) => dayPeriods[d].length), 0);
-  // معامل تكبير الخط: أقل صفوف → خط أكبر؛ أكثر دروس → خط أصغر
-  const showTime = n <= 8;
-  // معامل حجم الخط من أبعاد الخانة الفعلية على ورقة A3 (404×250مم تقريباً)
-  const cellW = ((404 - (cols - 1) * 5) / cols - 15) / Math.max(maxP, 1);
-  const cellH = ((250 - (rowsN - 1) * 5) / rowsN - 15) / Math.max(days.length, 1);
-  const k = Math.max(0.65, Math.min(1.9, Math.min(cellW / 14, cellH / (showTime ? 17 : 12))));
-  let h = `<section class="sheet a3">${header(info, `كل صفوف المدرسة (${n})`)}<div class="grid3" style="--cols:${cols};--rows:${rowsN};--k:${k.toFixed(2)}">`;
-  classes.forEach((c) => {
-    const rows = schedule.filter((s) => s.class_id === c.id);
-    const per = (d) => (c.periods_by_day && c.periods_by_day[d] != null ? c.periods_by_day[d] : dayPeriods[d].length);
-    h += `<div class="mini"><h3>${esc(c.name)}</h3><table><thead><tr><th class="corner"></th>${Array.from({ length: maxP }, (_, i) => `<th>${i + 1}</th>`).join("")}</tr></thead><tbody>`;
-    days.forEach((d) => {
-      h += `<tr><th class="day">${DAY_NAMES[d]}</th>`;
-      for (let p = 1; p <= maxP; p++) {
-        if (p > per(d)) { h += `<td class="off"></td>`; continue; }
-        const pt = dayPeriods[d][p - 1], s = rows.find((r) => r.day_of_week === d && r.period_number === p);
-        h += `<td>${showTime ? pill(pt) : ""}${s ? `<div class="slot" style="--c:${esc(s.subject_color || "#1E3A4C")}"><b>${esc(s.subject_name)}</b><i>${esc(s.teacher_name)}</i></div>` : ""}</td>`;
-      }
+  const R = days.reduce((t, d) => t + dayPeriods[d].length, 0); // مجموع صفوف الجدول
+  // اختيار اتجاه الورقة الأنسب
+  const fit = (W, H) => Math.min((W - 44) / n / 30, (H - 38) / (R + 1) / 9);
+  const land = fit(404, 281) >= fit(281, 404);
+  const W = land ? 404 : 281, H = land ? 281 : 404;
+  const cw = (W - 44) / n, rh = (H - 38) / (R + 1);
+  const px = rh * 3.78;
+  const fs = Math.max(8, Math.min(15, px * 0.3));
+  const vars = `--fs:${fs.toFixed(1)}px;--ft2:${(fs * 0.78).toFixed(1)}px;--fl:${Math.max(8, Math.min(14, px * 0.28)).toFixed(1)}px;--ft:${Math.max(7, Math.min(11, px * 0.2)).toFixed(1)}px;--fh:${Math.max(10, Math.min(16, cw * 0.5)).toFixed(1)}px;--fd:${Math.max(11, Math.min(18, px * 0.4)).toFixed(1)}px;--ic:${Math.max(12, Math.min(26, px * 0.5)).toFixed(0)}px`;
+  let h = `<section class="sheet a3 ${land ? "a3l" : "a3p"}" data-orient="${land ? "landscape" : "portrait"}">${header(info, `كل صفوف المدرسة (${classes.length})`)}`;
+  h += `<table class="big ${cw < 24 ? "noic" : ""}" style="${vars}"><thead><tr><th class="corner"></th><th class="corner2"></th>${classes.map((c) => `<th>${esc(c.name)}</th>`).join("")}</tr></thead><tbody>`;
+  days.forEach((d) => {
+    const P = dayPeriods[d].length;
+    for (let p = 1; p <= P; p++) {
+      const pt = dayPeriods[d][p - 1];
+      h += `<tr class="${p === 1 ? "first" : ""}">`;
+      if (p === 1) h += `<th class="dayv" rowspan="${P}"><span class="ic">${ic("calendar", Math.round(px * 0.55))}</span>${DAY_NAMES[d]}<span class="sh">${SHIFT_LABEL[shifts[d]] || ""}</span></th>`;
+      h += `<th class="lsn">${lessonName(p)}${pt ? `<span class="tm">${rng12(pt.start, pt.end)}</span>` : ""}</th>`;
+      classes.forEach((c) => {
+        const per = c.periods_by_day && c.periods_by_day[d] != null ? c.periods_by_day[d] : P;
+        if (p > per) { h += `<td class="off"></td>`; return; }
+        const x = schedule.find((r) => r.class_id === c.id && r.day_of_week === d && r.period_number === p);
+        h += `<td>${x ? `<div class="slot" style="--c:${esc(x.subject_color || "#1E3A4C")}"><div class="tx"><b>${esc(x.subject_name)}</b><i>${esc(x.teacher_name)}</i></div><span class="si">${window.TT ? TT.subject(x.subject_name, 24) : ""}</span></div>` : ""}</td>`;
+      });
       h += "</tr>";
-    });
-    h += "</tbody></table></div>";
+    }
   });
-  return h + "</div></section>";
+  return h + "</tbody></table></section>";
 }
 
 (async function () {
@@ -170,9 +177,9 @@ function schoolSheet({ info, classes, schedule, dayPeriods, shifts }) {
   if (!Array.isArray(classes) || !Array.isArray(schedule)) { el.innerHTML = '<p class="msg">الرابط غير صالح.</p>'; return; }
   const shifts = wd.shifts, out = [];
   if (q.get("school")) {
-    const st = document.createElement("style"); st.textContent = "@page { size: A3 landscape; margin: 8mm; }"; document.head.appendChild(st);
+    const st = document.createElement("style"); const so = schoolSheet({ info, classes, schedule, dayPeriods, shifts }); st.textContent = `@page { size: A3 ${so.includes('data-orient="landscape"') ? "landscape" : "portrait"}; margin: 8mm; }`; document.head.appendChild(st);
     document.querySelector(".bar button").textContent = "🖨️ طباعة (A3 — كل المدرسة)";
-    out.push(schoolSheet({ info, classes, schedule, dayPeriods, shifts }));
+    out.push(so);
   } else if (q.get("all")) {
     classes.forEach((c) => out.push(sheet({ info, subtitle: `الصف: ${c.name}`, rows: schedule.filter((s) => s.class_id === c.id), dayPeriods, shifts, mode: "class", cls: c })));
   } else if (q.get("teacher_id")) {
