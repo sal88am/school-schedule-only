@@ -2,7 +2,8 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#1E3A4C" />
 <title>سِجِلّ — نظام إدارة الحصص</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -12,26 +13,40 @@
 
 <!-- شاشة الدخول -->
 <div id="loginScreen" class="login-screen">
-  <div class="login-card">
-    <div class="brand">
-      <span class="brand-mark">سِ</span>
-      <div>
-        <h1>سِجِلّ</h1>
-        <p>نظام إدارة الحصص الدراسية</p>
-      </div>
+  <div class="login-wrap">
+    <div class="login-hero">
+      <span class="brand-mark lg">سِ</span>
+      <h1>سِجِلّ</h1>
+      <p>نظام إدارة الحصص الدراسية — جداول ذكية، طباعة احترافية، وحسابات مستقلة لكل مدرسة.</p>
     </div>
-    <label for="userInput">اسم المستخدم</label>
-    <input id="userInput" type="text" autocomplete="username" dir="ltr" placeholder="username" />
-    <label for="pwInput">كلمة المرور</label>
-    <input id="pwInput" type="password" autocomplete="current-password" dir="ltr" placeholder="••••••••" />
-    <button id="loginBtn" class="btn btn-primary">دخول</button>
-    <p id="loginError" class="error-text"></p>
+    <div class="login-card">
+      <h2>تسجيل الدخول</h2>
+      <label for="userInput">اسم المستخدم</label>
+      <input id="userInput" type="text" autocomplete="username" dir="ltr" placeholder="username" />
+      <label for="pwInput">كلمة المرور</label>
+      <input id="pwInput" type="password" autocomplete="current-password" dir="ltr" placeholder="••••••••" />
+      <button id="loginBtn" class="btn btn-primary btn-block">دخول</button>
+      <p id="loginError" class="error-text"></p>
+      <div class="dev-credit">
+  <div class="dev-copy">© جميع الحقوق محفوظة</div>
+  <div class="dev-name">من برمجة وتطوير <b>سلام الراوي</b></div>
+  <a class="wa-btn" href="https://wa.me/9647705691269" target="_blank" rel="noopener">
+    <span class="wa-ic">💬</span> تواصل مع المطوّر عبر واتساب
+  </a>
+</div>
+    </div>
   </div>
 </div>
 
 <!-- التطبيق -->
 <div id="app" class="app hidden">
-  <aside class="sidebar">
+  <header class="topbar">
+    <button id="menuBtn" class="menu-btn" aria-label="القائمة">☰</button>
+    <span class="brand-mark sm">سِ</span>
+    <b class="topbar-title" id="topbarTitle">سِجِلّ</b>
+  </header>
+  <div id="scrim" class="scrim"></div>
+  <aside class="sidebar" id="sidebar">
     <div class="brand brand-sm">
       <span class="brand-mark">سِ</span>
       <div><h1>سِجِلّ</h1></div>
@@ -49,15 +64,17 @@
       <button class="nav-link nav-school" data-view="schedule">🗓️ الجدول الدراسي</button>
       <button class="nav-link nav-school" data-view="settings">⚙️ الإعدادات</button>
     </nav>
-    <div class="developer-contact">
-      <a class="developer-contact-link" href="https://wa.me/9647705691269" target="_blank" rel="noopener noreferrer" aria-label="تواصل مع المطوّر عبر واتساب">💬 تواصل مع المطوّر</a>
-      <p class="developer-copyright">© جميع الحقوق محفوظة</p>
-      <p class="developer-credit">من تطوير وبرمجة سلام الراوي</p>
-    </div>
     <div class="sidebar-actions">
       <button class="btn btn-ghost side-btn" id="changePwBtn">🔑 تغيير كلمة المرور</button>
       <button class="btn btn-ghost side-btn" id="logoutBtn">⎋ تسجيل الخروج</button>
     </div>
+    <div class="dev-credit">
+  <div class="dev-copy">© جميع الحقوق محفوظة</div>
+  <div class="dev-name">من برمجة وتطوير <b>سلام الراوي</b></div>
+  <a class="wa-btn" href="https://wa.me/9647705691269" target="_blank" rel="noopener">
+    <span class="wa-ic">💬</span> تواصل مع المطوّر عبر واتساب
+  </a>
+</div>
   </aside>
 
   <main class="content">
@@ -287,16 +304,19 @@
           <h3>عرض الجدول</h3>
           <div class="schedule-controls">
             <select id="scheduleFilterType">
-              <option value="class">جدول صف</option>
+              <option value="class">جدول صف واحد</option>
+              <option value="all">جدول كل الصفوف</option>
               <option value="teacher">جدول معلم</option>
             </select>
             <select id="scheduleFilterValue"></select>
-            <button class="btn btn-ghost" id="printBtn">🖨️ طباعة</button>
+            <select id="scheduleDayFilter" class="hidden"></select>
+            <button class="btn btn-ghost" id="printBtn">🖨️ طباعة A4</button>
             <button class="btn btn-ghost" id="printAllBtn">🖨️ طباعة كل الصفوف</button>
             <button class="btn btn-ghost" id="shareBtn">🔗 نسخ رابط المشاركة</button>
           </div>
         </div>
         <p id="shareResult" class="muted-text"></p>
+        <div id="dayTabs" class="day-tabs hidden"></div>
         <div id="scheduleGrid" class="timetable-wrap"></div>
       </div>
     </section>

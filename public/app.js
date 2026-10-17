@@ -62,6 +62,7 @@ function applyRole() {
   document.querySelectorAll(".nav-school").forEach((b) => b.classList.toggle("hidden", !schoolMode));
   document.querySelectorAll(".nav-super").forEach((b) => b.classList.toggle("hidden", me.role !== "super_admin"));
   document.querySelectorAll(".nav-teacher").forEach((b) => b.classList.toggle("hidden", me.role !== "teacher"));
+  $("topbarTitle").textContent = me.school ? me.school.name : "سِجِلّ — المدير العام";
   $("userBox").innerHTML = `<b>${esc(me.school ? me.school.name : "المدير العام")}</b><span>${esc(me.username)}</span>`;
   const banner = $("actingBanner");
   if (acting) {
@@ -82,7 +83,10 @@ $("pwForm").addEventListener("submit", async (e) => {
 });
 
 // ---------- التنقل ----------
-document.querySelectorAll(".nav-link").forEach((btn) => btn.addEventListener("click", () => showView(btn.dataset.view)));
+document.querySelectorAll(".nav-link").forEach((btn) => btn.addEventListener("click", () => { showView(btn.dataset.view); closeMenu(); }));
+const closeMenu = () => document.body.classList.remove("nav-open");
+$("menuBtn").addEventListener("click", () => document.body.classList.toggle("nav-open"));
+$("scrim").addEventListener("click", closeMenu);
 function refreshView(v) {
   ({
     dashboard: loadDashboard,
@@ -130,7 +134,7 @@ async function loadMySchedule() {
   const at = (d, p) => data.rows.find((r) => r.day_of_week === d && r.period_number === p);
   let h = `<table class="timetable"><thead><tr><th></th>${days.map((d) => `<th>${DAY_NAMES[d]}</th>`).join("")}</tr></thead><tbody>`;
   for (let p = 1; p <= maxP; p++) {
-    h += `<tr><th class="period-cell"><span class="period-tab">${p}</span></th>`;
+    h += `<tr><th class="period-cell">${lessonName(p)}</th>`;
     days.forEach((d) => {
       const pt = data.day_periods[d][p - 1]; const r = at(d, p);
       h += `<td>${pt ? `<div class="cell-time">${pt.start}–${pt.end}</div>` : ""}${r ? `<div class="slot" style="--slot-color:#2F4858"><span class="subj">${esc(r.subject_name)}</span><span class="meta">${esc(r.class_name)}</span></div>` : ""}</td>`;
@@ -370,6 +374,10 @@ $("saveDaysBtn").addEventListener("click", async () => {
 });
 
 // ---------- الجدول الدراسي ----------
+const ORD = ["الأول", "الثاني", "الثالث", "الرابع", "الخامس", "السادس", "السابع", "الثامن", "التاسع", "العاشر", "الحادي عشر", "الثاني عشر"];
+const lessonName = (n) => `الدرس ${ORD[n - 1] || n}`;
+const isMobile = () => window.matchMedia("(max-width: 820px)").matches;
+let _dayShift = {}, mobileDay = null;
 async function getShareCode() {
   if (me.school) return me.school.share_code;
   const s = (await apiFetch("/api/super/schools")).find((x) => String(x.id) === store.get("sijil_school"));
@@ -389,15 +397,26 @@ async function loadScheduleView() {
   await refreshSchedule();
 }
 function fillFilterValues() {
-  const type = $("scheduleFilterType").value, sel = $("scheduleFilterValue"), keep = sel.value;
-  sel.innerHTML = type === "class" ? opts(_classes, (c) => c.name, keep) : opts(_teachers, (t) => t.name, keep);
+  const type = $("scheduleFilterType").value, sel = $("scheduleFilterValue"), day = $("scheduleDayFilter");
+  const keep = sel.value, keepDay = day.value;
+  sel.classList.toggle("hidden", type === "all"); day.classList.toggle("hidden", type !== "all");
+  if (type !== "all") sel.innerHTML = type === "class" ? opts(_classes, (c) => c.name, keep) : opts(_teachers, (t) => t.name, keep);
+  const days = Object.keys(_dayPeriods).map(Number).sort((x, y) => x - y);
+  day.innerHTML = `<option value="week">الأسبوع كاملاً (جدول لكل صف)</option>` + days.map((d) => `<option value="${d}" ${String(d) === keepDay ? "selected" : ""}>يوم ${DAY_NAMES[d]} (كل الصفوف)</option>`).join("");
+  if (keepDay) day.value = keepDay;
 }
 $("scheduleFilterType").addEventListener("change", () => { fillFilterValues(); renderGrid(); });
 $("scheduleFilterValue").addEventListener("change", renderGrid);
+$("scheduleDayFilter").addEventListener("change", renderGrid);
+let _wasMobile = null;
+window.addEventListener("resize", () => { const m = isMobile(); if (m !== _wasMobile) { _wasMobile = m; if ($("view-schedule").classList.contains("active")) renderGrid(); } });
 
 async function refreshSchedule() {
-  const [sched, report, dp] = await Promise.all([apiFetch("/api/schedule"), apiFetch("/api/schedule/validate"), apiFetch("/api/schedule-config/day-periods")]);
+  const [sched, report, dp, cfg] = await Promise.all([apiFetch("/api/schedule"), apiFetch("/api/schedule/validate"), apiFetch("/api/schedule-config/day-periods"), apiFetch("/api/schedule-config")]);
   _schedule = sched; _dayPeriods = dp; _status = report.status;
+  const lbl = Object.fromEntries(cfg.shifts.map((s) => [s.shift_type, s.label]));
+  _dayShift = Object.fromEntries(cfg.dayConfig.map((d) => [d.day_of_week, lbl[d.shift_type] || ""]));
+  fillFilterValues();
   const b = $("statusBadge"); b.textContent = statusLabel(_status); b.className = `status-badge ${_status}`;
   $("approveBtn").classList.toggle("hidden", _status === "approved");
   $("unapproveBtn").classList.toggle("hidden", _status !== "approved");
@@ -446,38 +465,90 @@ $("scheduleForm").addEventListener("submit", async (e) => {
 
 function currentFilter() { return { type: $("scheduleFilterType").value, value: $("scheduleFilterValue").value }; }
 
+const workDays = () => Object.keys(_dayPeriods).map(Number).sort((x, y) => x - y);
+
+function slotHtml(s, perspective, editable, day, period) {
+  const meta = perspective === "teacher" ? s.class_name : s.teacher_name;
+  const handlers = editable ? `draggable="true" ondragstart="dragSlot(event, ${s.id})" onclick="openSlot(${day}, ${period}, ${s.id})"` : "";
+  return `<div class="slot" ${handlers} style="--slot-color:${esc(s.subject_color || "#2F4858")}"><span class="subj">${esc(s.subject_name)}</span><span class="meta">${esc(meta)}</span></div>`;
+}
+
+// جدول أسبوعي لصف أو معلم: الأعمدة = أيام الدوام، الصفوف = الدرس الأول، الثاني...
+function timetableHtml({ rows, cls, perspective, editable }) {
+  const days = workDays();
+  const periodsOf = (d) => (cls && cls.custom_periods_per_day ? cls.custom_periods_per_day : _dayPeriods[d].length);
+  const maxP = Math.max(0, ...days.map(periodsOf));
+  const at = (d, p) => rows.find((s) => s.day_of_week === d && s.period_number === p);
+  let h = `<table class="timetable"><thead><tr><th></th>${days.map((d) => `<th>${DAY_NAMES[d]}<span class="shift-tag">${esc(_dayShift[d] || "")}</span></th>`).join("")}</tr></thead><tbody>`;
+  for (let p = 1; p <= maxP; p++) {
+    h += `<tr><th class="period-cell">${lessonName(p)}</th>`;
+    days.forEach((d) => {
+      if (p > periodsOf(d)) { h += `<td class="off"></td>`; return; }
+      const pt = _dayPeriods[d][p - 1], s = at(d, p);
+      const drop = editable ? `ondragover="event.preventDefault()" ondrop="dropSlot(event, ${d}, ${p})"` : "";
+      h += `<td ${drop}>${pt ? `<div class="cell-time">${pt.start}–${pt.end}</div>` : ""}${s ? slotHtml(s, perspective, editable, d, p) : editable ? `<button class="add-slot" onclick="openSlot(${d}, ${p})" title="إضافة حصة">＋</button>` : ""}</td>`;
+    });
+    h += "</tr>";
+  }
+  return h + "</tbody></table>";
+}
+
+// الجوال: تبويب لكل يوم + بطاقة لكل درس
+function mobileListHtml({ rows, cls, perspective, editable }) {
+  const days = workDays();
+  if (!days.length) return "";
+  if (mobileDay === null || !days.includes(mobileDay)) { const t = new Date().getDay(); mobileDay = days.includes(t) ? t : days[0]; }
+  $("dayTabs").classList.remove("hidden");
+  $("dayTabs").innerHTML = days.map((d) => `<button class="day-tab ${d === mobileDay ? "active" : ""}" onclick="setMobileDay(${d})">${DAY_NAMES[d]}<small>${esc(_dayShift[d] || "")}</small></button>`).join("");
+  const n = cls && cls.custom_periods_per_day ? cls.custom_periods_per_day : _dayPeriods[mobileDay].length;
+  let h = '<div class="lesson-list">';
+  for (let p = 1; p <= n; p++) {
+    const pt = _dayPeriods[mobileDay][p - 1], s = rows.find((x) => x.day_of_week === mobileDay && x.period_number === p);
+    h += `<div class="lesson-card"><div class="lesson-no">${lessonName(p)}${pt ? `<div class="cell-time">${pt.start}–${pt.end}</div>` : ""}</div>
+      <div class="lesson-body">${s ? slotHtml(s, perspective, editable, mobileDay, p) : editable ? `<button class="add-slot" onclick="openSlot(${mobileDay}, ${p})">＋ إضافة حصة</button>` : '<span class="muted-text">— لا توجد حصة —</span>'}</div></div>`;
+  }
+  return h + "</div>";
+}
+function setMobileDay(d) { mobileDay = d; renderGrid(); }
+
+// كل الصفوف: أسبوعياً (جدول لكل صف) أو ليوم واحد (الصفوف × الدروس)
+function allClassesHtml() {
+  const day = $("scheduleDayFilter").value;
+  if (!_classes.length) return '<p class="muted-text pad">أضف صفوفاً أولاً.</p>';
+  if (day === "week") {
+    return _classes.map((c) => `<div class="class-block compact"><h4>${esc(c.name)}</h4><div class="timetable-wrap">${timetableHtml({ rows: _schedule.filter((s) => s.class_id === c.id), cls: c, perspective: "class", editable: false })}</div></div>`).join("");
+  }
+  const d = Number(day);
+  if (!_dayPeriods[d]) return "";
+  const maxP = Math.max(..._classes.map((c) => (c.custom_periods_per_day || _dayPeriods[d].length)));
+  let h = `<table class="timetable matrix"><thead><tr><th>الصف</th>${Array.from({ length: maxP }, (_, i) => `<th>${lessonName(i + 1)}<span class="shift-tag mono">${_dayPeriods[d][i] ? `${_dayPeriods[d][i].start}–${_dayPeriods[d][i].end}` : ""}</span></th>`).join("")}</tr></thead><tbody>`;
+  _classes.forEach((c) => {
+    const n = c.custom_periods_per_day || _dayPeriods[d].length;
+    h += `<tr><th class="period-cell class-cell">${esc(c.name)}</th>`;
+    for (let p = 1; p <= maxP; p++) {
+      const s = _schedule.find((x) => x.class_id === c.id && x.day_of_week === d && x.period_number === p);
+      h += p > n ? '<td class="off"></td>' : `<td>${s ? slotHtml(s, "class", false, d, p) : ""}</td>`;
+    }
+    h += "</tr>";
+  });
+  return `<p class="muted-text pad">يوم ${DAY_NAMES[d]} — ${esc(_dayShift[d] || "")}</p>` + h + "</tbody></table>";
+}
+
 function renderGrid() {
   const { type, value } = currentFilter();
-  if (!value) { $("scheduleGrid").innerHTML = '<p class="muted-text">أضف صفوفاً أو معلمين أولاً.</p>'; return; }
+  const grid = $("scheduleGrid");
+  $("dayTabs").classList.add("hidden");
+  grid.classList.remove("compact");
+  if (!workDays().length) { grid.innerHTML = '<p class="muted-text pad">حدّد أيام الدوام من «إعدادات الدوام».</p>'; return; }
+  if (type === "all") { grid.style.cssText = "border:none;box-shadow:none;background:transparent"; grid.innerHTML = allClassesHtml(); return; }
+  grid.style.cssText = "";
+  if (!value) { grid.innerHTML = '<p class="muted-text pad">أضف صفوفاً أو معلمين أولاً.</p>'; return; }
   const rows = _schedule.filter((s) => String(type === "class" ? s.class_id : s.teacher_id) === value);
-  const days = Object.keys(_dayPeriods).map(Number).sort((a, b) => a - b);
-  if (!days.length) { $("scheduleGrid").innerHTML = '<p class="muted-text">حدّد أيام الدوام من «إعدادات الدوام».</p>'; return; }
   const cls = type === "class" ? _classes.find((c) => String(c.id) === value) : null;
-  const periodsOf = (d) => (cls && cls.custom_periods_per_day ? cls.custom_periods_per_day : _dayPeriods[d].length);
-  const maxP = Math.max(...days.map((d) => (cls ? periodsOf(d) : _dayPeriods[d].length)), 0);
-  const editable = _status !== "approved" && type === "class";
-  const at = (d, p) => rows.find((s) => s.day_of_week === d && s.period_number === p);
-  let html = `<table class="timetable"><thead><tr><th></th>${days.map((d) => `<th>${DAY_NAMES[d]}</th>`).join("")}</tr></thead><tbody>`;
-  for (let p = 1; p <= maxP; p++) {
-    html += `<tr><th class="period-cell"><span class="period-tab">${p}</span></th>`;
-    days.forEach((d) => {
-      const valid = p <= (cls ? periodsOf(d) : _dayPeriods[d].length);
-      if (!valid) { html += `<td class="off"></td>`; return; }
-      const pt = _dayPeriods[d][p - 1];
-      const time = pt ? `<div class="cell-time">${pt.start}–${pt.end}</div>` : "";
-      const s = at(d, p);
-      const drop = editable ? `ondragover="event.preventDefault()" ondrop="dropSlot(event, ${d}, ${p})"` : "";
-      if (s) {
-        html += `<td ${drop}>${time}<div class="slot" ${editable ? `draggable="true" ondragstart="dragSlot(event, ${s.id})" onclick="openSlot(${d}, ${p}, ${s.id})"` : ""} style="--slot-color:${esc(s.subject_color || "#2F4858")}">
-          <span class="subj">${esc(s.subject_name)}</span><span class="meta">${esc(type === "class" ? s.teacher_name : s.class_name)}</span></div></td>`;
-      } else {
-        html += `<td ${drop}>${time}${editable ? `<button class="add-slot" onclick="openSlot(${d}, ${p})" title="إضافة حصة">＋</button>` : ""}</td>`;
-      }
-    });
-    html += "</tr>";
-  }
-  $("scheduleGrid").innerHTML = html + "</tbody></table>"
-    + (editable ? '<p class="muted-text pad">اسحب أي حصة لنقلها إلى خانة فارغة أو لتبديلها مع حصة أخرى، أو اضغط عليها لتعديل المادة/المعلم أو حذفها.</p>' : "");
+  const args = { rows, cls, perspective: type, editable: _status !== "approved" && type === "class" };
+  if (isMobile()) { grid.style.cssText = "border:none;box-shadow:none;background:transparent"; grid.innerHTML = mobileListHtml(args); return; }
+  grid.innerHTML = timetableHtml(args)
+    + (args.editable ? '<p class="muted-text pad">اسحب أي حصة لنقلها إلى خانة فارغة أو لتبديلها مع حصة أخرى، أو اضغط عليها لتعديل المادة/المعلم أو حذفها.</p>' : "");
 }
 
 // سحب وإفلات
@@ -530,7 +601,7 @@ let _shareCode = "";
 function shareCode() { return _shareCode; }
 function shareUrl(all) {
   const { type, value } = currentFilter(); const code = shareCode(); const base = `${location.origin}/print.html?s=${code}`;
-  if (all) return `${base}&all=1`;
+  if (all || type === "all") return `${base}&all=1`;
   return type === "class" ? `${base}&class_id=${value}` : `${base}&teacher_id=${value}`;
 }
 $("printBtn").addEventListener("click", () => window.open(shareUrl(false), "_blank"));

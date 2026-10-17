@@ -3,67 +3,92 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>الجدول الدراسي — سِجِلّ</title>
+<title>جدول الحصص الأسبوعي</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css" />
 <style>
-  @page { size: A4 landscape; margin: 10mm; }
-  body { background: #fff; padding: 20px; }
-  .print-actions { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 14px; }
-  .sheet { page-break-after: always; break-after: page; }
-  .sheet:last-child { page-break-after: auto; break-after: auto; }
-  .sub-title { text-align: center; font-family: "Cairo", sans-serif; font-weight: 700; font-size: 17px; margin: -8px 0 4px; color: var(--ink); }
-  .year { text-align: center; color: var(--muted); font-size: 13px; margin-bottom: 14px; }
-  .timetable { min-width: 0; }
-  .timetable td { height: 64px; min-width: 0; }
-  .shift-tag { display: block; font-size: 10px; font-weight: 500; opacity: .8; }
+  @page { size: A4 landscape; margin: 9mm; }
+  :root { --ink:#14212B; --muted:#5E6C7A; --line:#CBD3DB; --brand:#1E3A4C; --brand2:#2D566B; --accent:#C48A2C; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { font-family: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif; color: var(--ink); background: #E9EDF1; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .bar { position: sticky; top: 0; z-index: 5; display: flex; gap: 10px; justify-content: center; padding: 10px; background: var(--brand); }
+  .bar button { border: 0; border-radius: 10px; padding: 10px 22px; font: 600 14px "IBM Plex Sans Arabic", sans-serif; cursor: pointer; background: var(--accent); color: #2B1D05; }
+  .bar button.alt { background: rgba(255,255,255,.14); color: #fff; }
+
+  /* الورقة: A4 أفقي */
+  .sheet { width: 297mm; min-height: 210mm; margin: 16px auto; padding: 9mm; background: #fff; box-shadow: 0 10px 40px rgba(20,33,43,.2); display: flex; flex-direction: column; }
+  .ph { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 3px solid var(--accent); margin-bottom: 8px; }
+  .ph-logo img { max-height: 21mm; max-width: 48mm; object-fit: contain; display: block; }
+  .ph-title { text-align: center; }
+  .ph-title h1 { margin: 0; font: 800 22px "Cairo", sans-serif; color: var(--brand); letter-spacing: .2px; }
+  .ph-title .school { margin-top: 1px; font: 700 15px "Cairo", sans-serif; color: var(--ink); }
+  .ph-meta { text-align: left; }
+  .chip { display: inline-block; background: var(--brand); color: #fff; padding: 6px 18px; border-radius: 9px; font: 700 16px "Cairo", sans-serif; }
+  .year { margin-top: 4px; font-size: 12px; color: var(--muted); }
+
+  table { width: 100%; border-collapse: separate; border-spacing: 0; flex: 1; table-layout: fixed; border: 1.5px solid var(--brand); border-radius: 8px; overflow: hidden; }
+  thead th { background: linear-gradient(180deg, var(--brand2), var(--brand)); color: #fff; font: 700 14px "Cairo", sans-serif; padding: 7px 4px; text-align: center; border-inline-start: 1px solid rgba(255,255,255,.18); }
+  thead th:first-child { border-inline-start: 0; }
+  .sh { display: block; font: 500 10px "IBM Plex Sans Arabic", sans-serif; opacity: .8; }
+  th.lesson { width: 27mm; background: #EEF2F6; color: var(--brand); font: 800 13px "Cairo", sans-serif; text-align: center; border-top: 1px solid var(--line); }
+  td { border-top: 1px solid var(--line); border-inline-start: 1px solid var(--line); padding: 3px 4px; vertical-align: middle; text-align: center; }
+  td.off { background: repeating-linear-gradient(45deg, #F6F7F9, #F6F7F9 4px, #ECEEF1 4px, #ECEEF1 8px); }
+  .t { display: block; font: 500 8.5px "JetBrains Mono", monospace; color: var(--muted); direction: ltr; unicode-bidi: isolate; margin-bottom: 1px; }
+  .slot { --c: var(--brand); border-radius: 6px; padding: 3px 6px; background: #fff; background: color-mix(in srgb, var(--c) 12%, #fff); border-inline-start: 3.5px solid var(--c); text-align: right; }
+  .slot b { display: block; font: 800 12.5px "Cairo", sans-serif; color: var(--c); color: color-mix(in srgb, var(--c) 75%, #000); line-height: 1.25; }
+  .slot i { display: block; font: normal 400 10px "IBM Plex Sans Arabic", sans-serif; color: #44515F; line-height: 1.25; }
+  .foot { margin-top: 6px; display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); }
+  .msg { text-align: center; padding: 60px; color: var(--muted); }
+
   @media print {
-    .print-actions { display: none; }
-    body { padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .timetable-wrap { box-shadow: none; border-radius: 0; overflow: visible; }
-    .timetable { border-radius: 0; }
-    .timetable td { height: 17mm; padding: 3px; }
-    .slot { box-shadow: none; padding: 4px 7px; }
-    .school-header { margin-bottom: 8px; }
-    .school-header img { max-height: 16mm; }
-    .school-header h1 { font-size: 19px; }
+    body { background: #fff; }
+    .bar { display: none; }
+    .sheet { width: auto; min-height: 0; height: 192mm; margin: 0; padding: 0; box-shadow: none; page-break-after: always; break-after: page; }
+    .sheet:last-child { page-break-after: auto; break-after: auto; }
   }
+  @media (max-width: 1100px) { .sheet { zoom: .55; margin: 8px auto; } }
+  @media (max-width: 700px) { .sheet { zoom: .34; } }
+  @media print { .sheet { zoom: 1 !important; } }
 </style>
 </head>
 <body>
-  <div class="print-actions"><button class="btn btn-primary" onclick="window.print()">🖨️ طباعة (A4 أفقي)</button></div>
+  <div class="bar no-print">
+    <button onclick="window.print()">🖨️ طباعة (A4 أفقي)</button>
+    <button class="alt" onclick="history.length > 1 ? history.back() : window.close()">رجوع</button>
+  </div>
   <div id="sheets"></div>
 
 <script>
 const DAY_NAMES = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const SHIFT_LABEL = { morning: "صباحي", evening: "مسائي" };
+const ORD = ["الأول", "الثاني", "الثالث", "الرابع", "الخامس", "السادس", "السابع", "الثامن", "التاسع", "العاشر", "الحادي عشر", "الثاني عشر"];
+const lessonName = (n) => `الدرس ${ORD[n - 1] || n}`;
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const CODE = new URLSearchParams(location.search).get("s") || "";
 const api = (p) => fetch(p.replace("/api/public/", `/api/public/${encodeURIComponent(CODE)}/`)).then((r) => r.json());
 
-function sheet({ info, title, rows, dayPeriods, shifts, mode, cls }) {
+function sheet({ info, subtitle, rows, dayPeriods, shifts, mode, cls }) {
   const days = Object.keys(dayPeriods).map(Number).sort((a, b) => a - b);
   const periodsOf = (d) => (cls && cls.custom_periods_per_day ? cls.custom_periods_per_day : dayPeriods[d].length);
   const maxP = Math.max(...days.map(periodsOf), 0);
-  let h = `<section class="sheet"><div class="school-header">`;
-  if (info.school_logo) h += `<img src="${esc(info.school_logo)}" alt="شعار المدرسة" />`;
-  h += `<h1>جدول الحصص الأسبوعي</h1>`;
-  if (info.school_name) h += `<div class="school-name">${esc(info.school_name)}</div>`;
-  h += `</div><div class="sub-title">${esc(title)}</div>`;
-  if (info.school_year) h += `<div class="year">العام الدراسي ${esc(info.school_year)}</div>`;
-  h += `<div class="timetable-wrap"><table class="timetable"><thead><tr><th></th>${days.map((d) => `<th>${DAY_NAMES[d]}<span class="shift-tag">${SHIFT_LABEL[shifts[d]] || ""}</span></th>`).join("")}</tr></thead><tbody>`;
+  const rowH = Math.max(12, Math.min(22, Math.floor(118 / Math.max(maxP, 1)))); // mm
+  let h = `<section class="sheet"><header class="ph">
+    <div class="ph-logo">${info.school_logo ? `<img src="${esc(info.school_logo)}" alt="شعار المدرسة" />` : ""}</div>
+    <div class="ph-title"><h1>جدول الحصص الأسبوعي</h1>${info.school_name ? `<div class="school">${esc(info.school_name)}</div>` : ""}${info.school_year ? `<div class="year">العام الدراسي ${esc(info.school_year)}</div>` : ""}</div>
+    <div class="ph-meta"><span class="chip">${esc(subtitle)}</span></div></header>`;
+  h += `<table><thead><tr><th style="width:27mm"></th>${days.map((d) => `<th>${DAY_NAMES[d]}<span class="sh">${SHIFT_LABEL[shifts[d]] || ""}</span></th>`).join("")}</tr></thead><tbody>`;
   for (let p = 1; p <= maxP; p++) {
-    h += `<tr><th class="period-cell"><span class="period-tab">${p}</span></th>`;
+    h += `<tr style="height:${rowH}mm"><th class="lesson">${lessonName(p)}</th>`;
     days.forEach((d) => {
       if (p > periodsOf(d)) { h += `<td class="off"></td>`; return; }
       const pt = dayPeriods[d][p - 1];
       const s = rows.find((r) => r.day_of_week === d && r.period_number === p);
-      h += `<td>${pt ? `<div class="cell-time">${pt.start}–${pt.end}</div>` : ""}${s ? `<div class="slot" style="--slot-color:${esc(s.subject_color || "#2F4858")}"><span class="subj">${esc(s.subject_name)}</span><span class="meta">${esc(mode === "teacher" ? s.class_name : s.teacher_name)}</span></div>` : ""}</td>`;
+      h += `<td>${pt ? `<span class="t">${pt.start}–${pt.end}</span>` : ""}${s ? `<div class="slot" style="--c:${esc(s.subject_color || "#1E3A4C")}"><b>${esc(s.subject_name)}</b><i>${esc(mode === "teacher" ? s.class_name : s.teacher_name)}</i></div>` : ""}</td>`;
     });
     h += "</tr>";
   }
-  return h + "</tbody></table></div></section>";
+  return h + "</tbody></table></section>";
 }
 
 (async function () {
@@ -72,19 +97,19 @@ function sheet({ info, title, rows, dayPeriods, shifts, mode, cls }) {
     api("/api/public/school-info"), api("/api/public/schedule"), api("/api/public/classes"),
     api("/api/public/teachers"), api("/api/public/day-periods"), api("/api/public/working-days"),
   ]);
-  if (!Array.isArray(classes) || !Array.isArray(schedule)) { document.getElementById("sheets").innerHTML = '<p class="muted-text">الرابط غير صالح.</p>'; return; }
-  const shifts = wd.shifts;
-  const out = [];
+  const el = document.getElementById("sheets");
+  if (!Array.isArray(classes) || !Array.isArray(schedule)) { el.innerHTML = '<p class="msg">الرابط غير صالح.</p>'; return; }
+  const shifts = wd.shifts, out = [];
   if (q.get("all")) {
-    classes.forEach((c) => out.push(sheet({ info, title: `الصف: ${c.name}`, rows: schedule.filter((s) => s.class_id === c.id), dayPeriods, shifts, mode: "class", cls: c })));
+    classes.forEach((c) => out.push(sheet({ info, subtitle: `الصف: ${c.name}`, rows: schedule.filter((s) => s.class_id === c.id), dayPeriods, shifts, mode: "class", cls: c })));
   } else if (q.get("teacher_id")) {
     const t = teachers.find((x) => String(x.id) === q.get("teacher_id"));
-    out.push(sheet({ info, title: `المعلم: ${t ? t.name : ""}`, rows: schedule.filter((s) => String(s.teacher_id) === q.get("teacher_id")), dayPeriods, shifts, mode: "teacher" }));
+    out.push(sheet({ info, subtitle: `المعلم: ${t ? t.name : ""}`, rows: schedule.filter((s) => String(s.teacher_id) === q.get("teacher_id")), dayPeriods, shifts, mode: "teacher" }));
   } else {
     const c = classes.find((x) => String(x.id) === q.get("class_id")) || classes[0];
-    if (c) out.push(sheet({ info, title: `الصف: ${c.name}`, rows: schedule.filter((s) => s.class_id === c.id), dayPeriods, shifts, mode: "class", cls: c }));
+    if (c) out.push(sheet({ info, subtitle: `الصف: ${c.name}`, rows: schedule.filter((s) => s.class_id === c.id), dayPeriods, shifts, mode: "class", cls: c }));
   }
-  document.getElementById("sheets").innerHTML = out.length ? out.join("")   : '<p class="muted-text">الرابط غير صالح أو لا يوجد جدول محفوظ بعد.</p>';
+  el.innerHTML = out.join("") || '<p class="msg">لا يوجد جدول محفوظ بعد.</p>';
 })();
 </script>
 </body>
