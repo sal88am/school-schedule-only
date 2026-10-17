@@ -1,7 +1,9 @@
 const path = require("path");
+const fs = require("fs");
 const Database = require("better-sqlite3");
 
-const dbPath = path.join(__dirname, "..", "data", "school.db");
+const dbPath = process.env.DB_PATH || path.join(__dirname, "..", "data", "school.db");
+fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 const db = new Database(dbPath);
 
 db.pragma("journal_mode = WAL");
@@ -64,19 +66,10 @@ CREATE TABLE IF NOT EXISTS schedule (
 );
 `);
 
-// مواد افتراضية تُضاف تلقائياً أول مرة فقط (المستخدم يقدر يحذفها أو يضيف غيرها)
-const subjectCount = db.prepare("SELECT COUNT(*) AS n FROM subjects").get().n;
-if (subjectCount === 0) {
-  const defaultSubjects = [
-    "عربي", "اسلامية", "رياضيات", "انكليزي", "علوم", "اجتماعيات", "رياضة", "فنية",
-  ];
-  const insertSubject = db.prepare("INSERT OR IGNORE INTO subjects (name) VALUES (?)");
-  defaultSubjects.forEach((name) => insertSubject.run(name));
-}
-
 // ترحيل تلقائي: أي معلم عنده تخصص قديم (حقل نصي) بس ما عنده صفوف بجدول teacher_subjects بعد
 // يُربط تلقائياً بالمادة المطابقة لاسم تخصصه (مرة وحدة فقط، لضمان التوافق مع البيانات القديمة)
-const legacyTeachers = db
+const subjectsAlreadyTenant = db.prepare("PRAGMA table_info(subjects)").all().some((c) => c.name === "school_id");
+const legacyTeachers = subjectsAlreadyTenant ? [] : db
   .prepare(
     `SELECT t.id, t.specialty FROM teachers t
      WHERE t.specialty IS NOT NULL AND t.specialty != ''
@@ -146,27 +139,10 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 `);
 
-// قيم أولية (مرة واحدة فقط إذا الجداول فارغة)
-if (db.prepare("SELECT COUNT(*) AS n FROM schedule_shifts").get().n === 0) {
-  const ins = db.prepare(
-    "INSERT INTO schedule_shifts (shift_type, label, start_time, period_count, period_minutes, break_minutes) VALUES (?,?,?,?,?,?)"
-  );
-  ins.run("morning", "صباحي", "08:00", 6, 40, 5);
-  ins.run("evening", "مسائي", "13:00", 6, 40, 5);
-}
-if (db.prepare("SELECT COUNT(*) AS n FROM day_shift_config").get().n === 0) {
-  const ins = db.prepare("INSERT INTO day_shift_config (day_of_week, shift_type) VALUES (?, ?)");
-  [["morning"], ["morning"], ["morning"], ["evening"], ["evening"], [null], [null]].forEach((v, i) => ins.run(i, v[0]));
-}
-if (!db.prepare("SELECT 1 FROM settings WHERE key = 'schedule_status'").get()) {
-  db.prepare("INSERT INTO settings (key, value) VALUES ('schedule_status', 'draft')").run();
-}
-
 const PALETTE = ["#2F4858", "#C98A3E", "#4C7A6B", "#8E5B45", "#5B6EA8", "#8B6F9E", "#B4533C", "#5D8A6E"];
-db.prepare("SELECT id FROM subjects WHERE color IS NULL").all().forEach((s) =>
-  db.prepare("UPDATE subjects SET color = ? WHERE id = ?").run(PALETTE[s.id % PALETTE.length], s.id)
-);
-
 module.exports = db;
 module.exports.ensureColumn = ensureColumn;
 module.exports.PALETTE = PALETTE;
+
+// ---------- Phase 9: تعدد المدارس (ترحيل آمن + أول مدرسة) ----------
+require("./migrations/multiTenant").run(db, ensureColumn, PALETTE);

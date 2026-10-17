@@ -4,14 +4,20 @@ const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const emptyRow = (cols) => `<tr><td colspan="${cols}" class="muted-text">لا توجد بيانات بعد</td></tr>`;
 
 // ---------- طبقة الاتصال بالـ API ----------
-const getPassword = () => localStorage.getItem("admin_pw") || "";
+const store = {
+  get: (k) => { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } },
+  set: (k, v) => { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch (e) { /* ignore */ } },
+};
+let me = null; // المستخدم الحالي
+
 async function apiFetch(path, options = {}) {
-  const res = await fetch(path, {
-    ...options,
-    headers: { "Content-Type": "application/json", "x-admin-password": getPassword(), ...(options.headers || {}) },
-  });
-  if (res.status === 401) throw new Error("UNAUTHORIZED");
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  const token = store.get("sijil_token");
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (me && me.role === "super_admin" && store.get("sijil_school")) headers["x-school-id"] = store.get("sijil_school");
+  const res = await fetch(path, { ...options, headers });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && token && !path.startsWith("/api/auth/login")) { logoutLocal(); throw new Error("انتهت الجلسة"); }
   if (!res.ok) throw new Error(data.error || "حدث خطأ غير متوقع");
   return data;
 }
@@ -19,45 +25,126 @@ const post = (p, b) => apiFetch(p, { method: "POST", body: JSON.stringify(b || {
 const put = (p, b) => apiFetch(p, { method: "PUT", body: JSON.stringify(b || {}) });
 const del = (p) => apiFetch(p, { method: "DELETE" });
 
-// ---------- تسجيل الدخول ----------
+// ---------- تسجيل الدخول والأدوار ----------
 $("loginBtn").addEventListener("click", tryLogin);
-$("pwInput").addEventListener("keydown", (e) => { if (e.key === "Enter") tryLogin(); });
-async function enter() {
-  await apiFetch("/api/teachers");
-  $("loginScreen").classList.add("hidden");
-  $("app").classList.remove("hidden");
-  loadDashboard();
-}
+["pwInput", "userInput"].forEach((id) => $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") tryLogin(); }));
+
 async function tryLogin() {
-  localStorage.setItem("admin_pw", $("pwInput").value);
-  try { await enter(); } catch (e) { $("loginError").textContent = "كلمة المرور غير صحيحة"; }
+  $("loginError").textContent = "";
+  try {
+    const r = await post("/api/auth/login", { username: $("userInput").value.trim(), password: $("pwInput").value });
+    store.set("sijil_token", r.token); store.set("sijil_school", "");
+    $("pwInput").value = "";
+    await enter();
+  } catch (e) { $("loginError").textContent = e.message; }
 }
-(async () => { if (getPassword()) { try { await enter(); } catch (e) { /* شاشة الدخول */ } } })();
+function logoutLocal() {
+  store.set("sijil_token", ""); store.set("sijil_school", ""); me = null;
+  $("app").classList.add("hidden"); $("loginScreen").classList.remove("hidden");
+}
+$("logoutBtn").addEventListener("click", async () => { try { await post("/api/auth/logout"); } catch (e) { /* ignore */ } logoutLocal(); });
+
+async function enter() {
+  me = await apiFetch("/api/auth/me");
+  $("loginScreen").classList.add("hidden"); $("app").classList.remove("hidden");
+  applyRole();
+}
+(async () => { if (store.get("sijil_token")) { try { await enter(); } catch (e) { logoutLocal(); } } })();
+
+function showView(view) {
+  document.querySelectorAll(".nav-link").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
+  document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${view}`));
+  refreshView(view);
+}
+function applyRole() {
+  const acting = me.role === "super_admin" && store.get("sijil_school");
+  const schoolMode = me.role === "school_admin" || acting;
+  document.querySelectorAll(".nav-school").forEach((b) => b.classList.toggle("hidden", !schoolMode));
+  document.querySelectorAll(".nav-super").forEach((b) => b.classList.toggle("hidden", me.role !== "super_admin"));
+  document.querySelectorAll(".nav-teacher").forEach((b) => b.classList.toggle("hidden", me.role !== "teacher"));
+  $("userBox").innerHTML = `<b>${esc(me.school ? me.school.name : "المدير العام")}</b><span>${esc(me.username)}</span>`;
+  const banner = $("actingBanner");
+  if (acting) {
+    banner.classList.remove("hidden");
+    banner.innerHTML = `أنت تدير مدرسة: <b>${esc(store.get("sijil_school_name"))}</b> <button class="btn btn-ghost" id="exitActingBtn">عودة إلى المدارس</button>`;
+    $("exitActingBtn").onclick = () => { store.set("sijil_school", ""); store.set("sijil_school_name", ""); applyRole(); };
+  } else banner.classList.add("hidden");
+  showView(me.role === "super_admin" ? (acting ? "dashboard" : "schools") : me.role === "teacher" ? "mySchedule" : "dashboard");
+}
+
+$("changePwBtn").addEventListener("click", () => { $("pwMsg").textContent = ""; $("pwForm").reset(); $("pwModal").classList.remove("hidden"); });
+$("pwCancel").addEventListener("click", () => $("pwModal").classList.add("hidden"));
+$("pwForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  try { await post("/api/auth/change-password", { old_password: fd.get("old_password"), new_password: fd.get("new_password") }); $("pwModal").classList.add("hidden"); alert("تم تغيير كلمة المرور"); }
+  catch (err) { $("pwMsg").textContent = err.message; }
+});
 
 // ---------- التنقل ----------
-document.querySelectorAll(".nav-link").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".nav-link").forEach((b) => b.classList.remove("active"));
-    document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
-    btn.classList.add("active");
-    $(`view-${btn.dataset.view}`).classList.add("active");
-    refreshView(btn.dataset.view);
-  });
-});
+document.querySelectorAll(".nav-link").forEach((btn) => btn.addEventListener("click", () => showView(btn.dataset.view)));
 function refreshView(v) {
   ({
     dashboard: loadDashboard,
     teachers: () => { loadTeacherForm(); loadTeachers(); },
     subjects: loadSubjects, classes: loadClasses, assignments: loadAssignments,
     shifts: loadShifts, schedule: loadScheduleView, settings: loadSchoolInfo,
+    schools: loadSchools, mySchedule: loadMySchedule,
   })[v]?.();
+}
+
+// ---------- المدارس (المدير العام) ----------
+const SUB_LABEL = { active: "نشط", trial: "تجريبي", suspended: "معلّق", expired: "منتهي" };
+async function loadSchools() {
+  const rows = await apiFetch("/api/super/schools");
+  $("schoolsTable").innerHTML = `<table><thead><tr><th>المدرسة</th><th>مدير المدرسة</th><th>معلمون</th><th>صفوف</th><th>الاشتراك</th><th>الحالة</th><th></th></tr></thead><tbody>${
+    rows.map((s) => `<tr><td>${esc(s.name)}</td><td class="mono">${esc(s.admin_username || "—")}</td><td>${s.teachers_count}</td><td>${s.classes_count}</td>
+    <td><select onchange="setSubscription(${s.id}, this.value)">${Object.entries(SUB_LABEL).map(([k, v]) => `<option value="${k}" ${s.subscription_status === k ? "selected" : ""}>${v}</option>`).join("")}</select></td>
+    <td><span class="badge ${s.is_active ? "badge-sent" : "badge-failed"}">${s.is_active ? "مفعّلة" : "موقوفة"}</span></td>
+    <td class="nowrap"><button class="btn btn-ghost" onclick="manageSchool(${s.id}, '${esc(s.name).replace(/'/g, "")}')">إدارة</button>
+      <button class="btn btn-ghost" onclick="toggleSchool(${s.id}, ${s.is_active ? 0 : 1})">${s.is_active ? "إيقاف" : "تفعيل"}</button>
+      <button class="btn btn-ghost" onclick="resetAdminPw(${s.id})">كلمة سر المدير</button></td></tr>`).join("") || emptyRow(7)}</tbody></table>`;
+}
+$("schoolCreateForm").addEventListener("submit", async (e) => {
+  e.preventDefault(); $("schoolCreateMsg").textContent = "";
+  try { await post("/api/super/schools", Object.fromEntries(new FormData(e.target).entries())); e.target.reset(); loadSchools(); }
+  catch (err) { $("schoolCreateMsg").textContent = err.message; }
+});
+function manageSchool(id, name) { store.set("sijil_school", String(id)); store.set("sijil_school_name", name); applyRole(); }
+async function toggleSchool(id, active) {
+  if (!active && !confirm("إيقاف المدرسة سيمنع الدخول لكل مستخدميها (البيانات تبقى محفوظة). متأكد؟")) return;
+  await put(`/api/super/schools/${id}`, { is_active: !!active }); loadSchools();
+}
+async function setSubscription(id, status) { await put(`/api/super/schools/${id}`, { subscription_status: status }); loadSchools(); }
+async function resetAdminPw(id) {
+  const pw = prompt("كلمة المرور الجديدة لمدير المدرسة (8 أحرف على الأقل):");
+  if (!pw) return;
+  try { await post(`/api/super/schools/${id}/reset-admin-password`, { password: pw }); alert("تم تغيير كلمة المرور"); } catch (e) { alert(e.message); }
+}
+
+// ---------- جدول المعلم ----------
+async function loadMySchedule() {
+  const data = await apiFetch("/api/me/schedule");
+  const days = Object.keys(data.day_periods).map(Number).sort((a, b) => a - b);
+  const maxP = Math.max(0, ...days.map((d) => data.day_periods[d].length));
+  const at = (d, p) => data.rows.find((r) => r.day_of_week === d && r.period_number === p);
+  let h = `<table class="timetable"><thead><tr><th></th>${days.map((d) => `<th>${DAY_NAMES[d]}</th>`).join("")}</tr></thead><tbody>`;
+  for (let p = 1; p <= maxP; p++) {
+    h += `<tr><th class="period-cell"><span class="period-tab">${p}</span></th>`;
+    days.forEach((d) => {
+      const pt = data.day_periods[d][p - 1]; const r = at(d, p);
+      h += `<td>${pt ? `<div class="cell-time">${pt.start}–${pt.end}</div>` : ""}${r ? `<div class="slot" style="--slot-color:#2F4858"><span class="subj">${esc(r.subject_name)}</span><span class="meta">${esc(r.class_name)}</span></div>` : ""}</td>`;
+    });
+    h += "</tr>";
+  }
+  $("myScheduleGrid").innerHTML = data.rows.length ? h + "</tbody></table>" : '<p class="muted-text pad">لا توجد حصص في جدولك بعد.</p>';
 }
 
 // ---------- نظرة عامة ----------
 async function loadDashboard() {
   const [teachers, classes, subjects, schedule, report, cfg] = await Promise.all([
     apiFetch("/api/teachers"), apiFetch("/api/classes"), apiFetch("/api/subjects"),
-    apiFetch("/api/schedule"), apiFetch("/api/schedule/validate"), apiFetch("/api/public/day-periods"),
+    apiFetch("/api/schedule"), apiFetch("/api/schedule/validate"), apiFetch("/api/schedule-config/day-periods"),
   ]);
   $("statGrid").innerHTML = [
     [teachers.length, "معلم/ـة"], [subjects.length, "مادة دراسية"], [classes.length, "صف/شعبة"], [schedule.length, "حصة في الجدول"],
@@ -109,9 +196,20 @@ async function editTeacher(id) {
 async function loadTeachers() {
   const [teachers, classes] = await Promise.all([apiFetch("/api/teachers"), apiFetch("/api/classes")]);
   const cname = Object.fromEntries(classes.map((c) => [c.id, c.name]));
-  $("teachersTable").innerHTML = `<table><thead><tr><th>الاسم</th><th>المواد</th><th>معلم صف</th><th>الهاتف</th><th></th></tr></thead><tbody>${
+  $("teachersTable").innerHTML = `<table><thead><tr><th>الاسم</th><th>المواد</th><th>معلم صف</th><th>الهاتف</th><th>حساب الدخول</th><th></th></tr></thead><tbody>${
     teachers.map((t) => `<tr><td>${esc(t.name)}</td><td>${t.subjects.map((s) => esc(s.name)).join("، ") || "—"}</td><td>${esc(cname[t.class_teacher_of] || "—")}</td><td>${esc(t.phone || "—")}</td>
-    <td><button class="btn btn-ghost" onclick="editTeacher(${t.id})">تعديل</button> <button class="btn btn-danger" onclick="deleteTeacher(${t.id})">حذف</button></td></tr>`).join("") || emptyRow(5)}</tbody></table>`;
+    <td>${t.account_username ? `<span class="mono">${esc(t.account_username)}</span> <button class="btn btn-ghost" onclick="resetTeacherPw(${t.id})">كلمة سر</button>` : `<button class="btn btn-ghost" onclick="createTeacherAccount(${t.id})">إنشاء حساب</button>`}</td>
+    <td><button class="btn btn-ghost" onclick="editTeacher(${t.id})">تعديل</button> <button class="btn btn-danger" onclick="deleteTeacher(${t.id})">حذف</button></td></tr>`).join("") || emptyRow(6)}</tbody></table>`;
+}
+async function createTeacherAccount(id) {
+  const username = prompt("اسم المستخدم للمعلم (إنكليزي/أرقام، 3 أحرف+):"); if (!username) return;
+  const password = prompt("كلمة المرور (8 أحرف على الأقل):"); if (!password) return;
+  try { await post("/api/users", { teacher_id: id, username, password }); loadTeachers(); } catch (e) { alert(e.message); }
+}
+async function resetTeacherPw(teacherId) {
+  const users = await apiFetch("/api/users"); const u = users.find((x) => x.teacher_id === teacherId); if (!u) return;
+  const password = prompt("كلمة المرور الجديدة (8 أحرف على الأقل):"); if (!password) return;
+  try { await put(`/api/users/${u.id}`, { password }); alert("تم التغيير"); } catch (e) { alert(e.message); }
 }
 async function deleteTeacher(id) {
   if (!confirm("حذف هذا المعلم؟ سينحذف من جدوله أيضاً.")) return;
@@ -272,10 +370,16 @@ $("saveDaysBtn").addEventListener("click", async () => {
 });
 
 // ---------- الجدول الدراسي ----------
+async function getShareCode() {
+  if (me.school) return me.school.share_code;
+  const s = (await apiFetch("/api/super/schools")).find((x) => String(x.id) === store.get("sijil_school"));
+  return s ? s.share_code : "";
+}
 let _status = "draft", _dayPeriods = {}, _schedule = [];
 
 async function loadScheduleView() {
   await loadLookups();
+  _shareCode = await getShareCode();
   const f = $("scheduleForm");
   f.class_id.innerHTML = opts(_classes, (c) => c.name);
   f.subject_id.innerHTML = opts(_subjects, (s) => s.name);
@@ -292,7 +396,7 @@ $("scheduleFilterType").addEventListener("change", () => { fillFilterValues(); r
 $("scheduleFilterValue").addEventListener("change", renderGrid);
 
 async function refreshSchedule() {
-  const [sched, report, dp] = await Promise.all([apiFetch("/api/schedule"), apiFetch("/api/schedule/validate"), apiFetch("/api/public/day-periods")]);
+  const [sched, report, dp] = await Promise.all([apiFetch("/api/schedule"), apiFetch("/api/schedule/validate"), apiFetch("/api/schedule-config/day-periods")]);
   _schedule = sched; _dayPeriods = dp; _status = report.status;
   const b = $("statusBadge"); b.textContent = statusLabel(_status); b.className = `status-badge ${_status}`;
   $("approveBtn").classList.toggle("hidden", _status === "approved");
@@ -422,10 +526,12 @@ $("slotDeleteBtn").addEventListener("click", async () => {
 });
 
 // طباعة ومشاركة
+let _shareCode = "";
+function shareCode() { return _shareCode; }
 function shareUrl(all) {
-  const { type, value } = currentFilter(); const base = `${location.origin}/print.html`;
-  if (all) return `${base}?all=1`;
-  return type === "class" ? `${base}?class_id=${value}` : `${base}?teacher_id=${value}`;
+  const { type, value } = currentFilter(); const code = shareCode(); const base = `${location.origin}/print.html?s=${code}`;
+  if (all) return `${base}&all=1`;
+  return type === "class" ? `${base}&class_id=${value}` : `${base}&teacher_id=${value}`;
 }
 $("printBtn").addEventListener("click", () => window.open(shareUrl(false), "_blank"));
 $("printAllBtn").addEventListener("click", () => window.open(shareUrl(true), "_blank"));
