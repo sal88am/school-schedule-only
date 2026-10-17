@@ -28,16 +28,18 @@
   .year { margin-top: 4px; font-size: 12px; color: var(--muted); }
 
   table { width: 100%; border-collapse: separate; border-spacing: 0; flex: 1; table-layout: fixed; border: 1.5px solid var(--brand); border-radius: 8px; overflow: hidden; }
-  thead th { background: linear-gradient(180deg, var(--brand2), var(--brand)); color: #fff; font: 700 14px "Cairo", sans-serif; padding: 7px 4px; text-align: center; border-inline-start: 1px solid rgba(255,255,255,.18); }
+  thead th { background: var(--brand); color: #fff; font: 700 15px "Cairo", sans-serif; padding: 8px 4px; text-align: center; border-bottom: 4px solid var(--accent); }
   thead th:first-child { border-inline-start: 0; }
+  table { border-radius: 12px; border: 1px solid var(--line); }
   .sh { display: block; font: 500 10px "IBM Plex Sans Arabic", sans-serif; opacity: .8; }
-  th.lesson { width: 27mm; background: #EEF2F6; color: var(--brand); font: 800 13px "Cairo", sans-serif; text-align: center; border-top: 1px solid var(--line); }
-  td { border-top: 1px solid var(--line); border-inline-start: 1px solid var(--line); padding: 3px 4px; vertical-align: middle; text-align: center; }
+  th.lesson { width: 27mm; background: #F4F6F9; color: var(--brand); font: 700 14px "Cairo", sans-serif; text-align: center; border-top: 1px solid var(--line); border-inline-start: 1px solid var(--line); }
+  td { border-top: 1px solid var(--line); border-inline-start: 1px solid var(--line); padding: 3px 5px; vertical-align: middle; text-align: right; }
   td.off { background: repeating-linear-gradient(45deg, #F6F7F9, #F6F7F9 4px, #ECEEF1 4px, #ECEEF1 8px); }
-  .t { display: block; font: 700 9.5px "JetBrains Mono", monospace; color: #2B3B4A; direction: ltr; unicode-bidi: isolate; margin-bottom: 1px; }
-  .slot { --c: var(--brand); border-radius: 6px; padding: 3px 6px; background: #fff; background: color-mix(in srgb, var(--c) 12%, #fff); border-inline-start: 3.5px solid var(--c); text-align: right; }
-  .slot b { display: block; font: 800 12.5px "Cairo", sans-serif; color: var(--c); color: color-mix(in srgb, var(--c) 75%, #000); line-height: 1.25; }
-  .slot i { display: block; font: normal 600 11.5px "IBM Plex Sans Arabic", sans-serif; color: #2B3B4A; line-height: 1.25; }
+  .t { display: inline-block; font: 700 10.5px "JetBrains Mono", monospace; color: #2B3B4A; background: #EEF2F6; padding: 1px 9px; border-radius: 999px; direction: ltr; unicode-bidi: isolate; margin-bottom: 3px; }
+  .slot { --c: var(--brand); border-radius: 10px; padding: 4px 10px; background: #fff; background: color-mix(in srgb, var(--c) 11%, #fff); border-inline-start: 4px solid var(--c); text-align: right; }
+  .slot b { display: block; font: 800 14px "Cairo", sans-serif; color: var(--c); color: color-mix(in srgb, var(--c) 78%, #000); line-height: 1.3; }
+  .slot i { display: block; font: normal 600 12px "IBM Plex Sans Arabic", sans-serif; color: #26343F; line-height: 1.35; }
+  .dense .slot { padding: 2px 8px; border-radius: 8px; } .dense .slot b { font-size: 12px; } .dense .slot i { font-size: 10.5px; } .dense .t { font-size: 9px; padding: 0 7px; margin-bottom: 1px; }
   .foot { margin-top: 6px; display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); }
   .msg { text-align: center; padding: 60px; color: var(--muted); }
 
@@ -60,8 +62,10 @@
   <div id="sheets"></div>
 
 <script>
-function t12(t) { if (!t) return "—"; const [h, m] = String(t).split(":").map(Number); const s = h >= 12 ? "م" : "ص"; return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${s}`; }
-function rng12(a, b) { if (!a || !b) return ""; const x = t12(a), y = t12(b); const sx = x.slice(-1), sy = y.slice(-1); return "\u2066" + (sx === sy ? `${x.slice(0, -2)}–${y}` : `${x}–${y}`) + "\u2069"; }
+function t12p(t) { const [h, m] = String(t).split(":").map(Number); return { t: `${h % 12 || 12}:${String(m).padStart(2, "0")}`, s: h >= 12 ? "م" : "ص" }; }
+const isl = (s) => "\u2066" + s + "\u2069"; // عزل اتجاه النص حتى لا ينقلب ترتيب الوقت
+function t12(t) { if (!t) return "—"; const p = t12p(t); return `${p.t} ${isl(p.s)}`; }
+function rng12(a, b) { if (!a || !b) return ""; const x = t12p(a), y = t12p(b); return isl(x.s === y.s ? `${x.t}–${y.t} ${isl(x.s)}` : `${x.t} ${isl(x.s)}–${y.t} ${isl(y.s)}`); }
 
 const DAY_NAMES = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const SHIFT_LABEL = { morning: "صباحي", evening: "مسائي" };
@@ -76,7 +80,7 @@ function sheet({ info, subtitle, rows, dayPeriods, shifts, mode, cls }) {
   const periodsOf = (d) => (cls && cls.periods_by_day && cls.periods_by_day[d] != null ? cls.periods_by_day[d] : dayPeriods[d].length);
   const maxP = Math.max(...days.map((d) => dayPeriods[d].length), 0);
   const rowH = Math.max(12, Math.min(22, Math.floor(118 / Math.max(maxP, 1)))); // mm
-  let h = `<section class="sheet"><header class="ph">
+  let h = `<section class="sheet ${maxP >= 8 ? "dense" : ""}"><header class="ph">
     <div class="ph-logo">${info.school_logo ? `<img src="${esc(info.school_logo)}" alt="شعار المدرسة" />` : ""}</div>
     <div class="ph-title"><h1>جدول الحصص الأسبوعي</h1>${info.school_name ? `<div class="school">${esc(info.school_name)}</div>` : ""}${info.school_year ? `<div class="year">العام الدراسي ${esc(info.school_year)}</div>` : ""}</div>
     <div class="ph-meta"><span class="chip">${esc(subtitle)}</span></div></header>`;
@@ -87,7 +91,7 @@ function sheet({ info, subtitle, rows, dayPeriods, shifts, mode, cls }) {
       if (p > periodsOf(d)) { h += `<td class="off"></td>`; return; }
       const pt = dayPeriods[d][p - 1];
       const s = rows.find((r) => r.day_of_week === d && r.period_number === p);
-      h += `<td>${pt ? `<span class="t">${rng12(pt.start, pt.end)}</span>` : ""}${s ? `<div class="slot" style="--c:${esc(s.subject_color || "#1E3A4C")}"><b>${esc(s.subject_name)}</b><i>${esc(mode === "teacher" ? s.class_name : s.teacher_name)}</i></div>` : ""}</td>`;
+      h += `<td>${pt ? `<span class="t">${rng12(pt.start, pt.end)}</span>` : ""}${s ? `<div class="slot" style="--c:${esc(s.subject_color || "#1E3A4C")}"><b>${esc(s.subject_name)}</b><i>${mode === "teacher" ? "🏫" : "👤"} ${esc(mode === "teacher" ? s.class_name : s.teacher_name)}</i></div>` : ""}</td>`;
     });
     h += "</tr>";
   }

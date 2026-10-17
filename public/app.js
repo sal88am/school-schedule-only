@@ -1,6 +1,8 @@
 
-function t12(t) { if (!t) return "—"; const [h, m] = String(t).split(":").map(Number); const s = h >= 12 ? "م" : "ص"; return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${s}`; }
-function rng12(a, b) { if (!a || !b) return ""; const x = t12(a), y = t12(b); const sx = x.slice(-1), sy = y.slice(-1); return "\u2066" + (sx === sy ? `${x.slice(0, -2)}–${y}` : `${x}–${y}`) + "\u2069"; }
+function t12p(t) { const [h, m] = String(t).split(":").map(Number); return { t: `${h % 12 || 12}:${String(m).padStart(2, "0")}`, s: h >= 12 ? "م" : "ص" }; }
+const isl = (s) => "\u2066" + s + "\u2069"; // عزل اتجاه النص حتى لا ينقلب ترتيب الوقت
+function t12(t) { if (!t) return "—"; const p = t12p(t); return `${p.t} ${isl(p.s)}`; }
+function rng12(a, b) { if (!a || !b) return ""; const x = t12p(a), y = t12p(b); return isl(x.s === y.s ? `${x.t}–${y.t} ${isl(x.s)}` : `${x.t} ${isl(x.s)}–${y.t} ${isl(y.s)}`); }
 const DAY_NAMES = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
