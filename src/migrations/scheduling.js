@@ -25,6 +25,7 @@ function run(db, ensureColumn) {
     FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE CASCADE
   );
   `);
+  ensureColumn("school_shifts", "breaks", "TEXT"); // JSON: مدة الاستراحة بعد كل درس [5,10,5,...] — NULL = break_minutes للكل
   ensureColumn("schedule", "lock_kind", "TEXT"); // NULL | 'manual' (تثبيت يدوي) | 'rule' (من قاعدة تثبيت)
 }
 module.exports = { run };

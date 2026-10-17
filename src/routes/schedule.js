@@ -52,6 +52,27 @@ function analyze({ sid, teacher_id, class_id, day, period, excludeIds = [] }) {
   return { invalid: null, conflicts };
 }
 
+// خانات فارغة لصف ومعلم معاً (مع استثناء حصص معيّنة من الإشغال)، مرتّبة بالأفضلية
+function freeSlotsFor(sid, cls, teacher_id, exIds, subject_id, refDay, refPeriod, forbid = []) {
+  const resolve = svc.periodsResolver(sid);
+  const classRows = db.prepare("SELECT * FROM schedule WHERE class_id=? AND school_id=?").all(cls.id, sid).filter((r) => !exIds.includes(r.id));
+  const teacherRows = db.prepare("SELECT * FROM schedule WHERE teacher_id=? AND school_id=?").all(teacher_id, sid).filter((r) => !exIds.includes(r.id));
+  const cBusy = new Set(classRows.map((r) => `${r.day_of_week}-${r.period_number}`));
+  const tBusy = new Set(teacherRows.map((r) => `${r.day_of_week}-${r.period_number}`));
+  const sameSubj = (d) => classRows.filter((r) => r.subject_id === subject_id && r.day_of_week === d).length;
+  const out = [];
+  svc.getWorkingDays(sid).forEach((d) => {
+    const n = resolve(cls, d);
+    for (let p = 1; p <= n; p++) {
+      const k = `${d}-${p}`;
+      if ((d === refDay && p === refPeriod) || cBusy.has(k) || tBusy.has(k) || forbid.includes(k)) continue;
+      const cat = d === refDay ? "sameDay" : p === refPeriod ? "sameLesson" : "other";
+      out.push({ d, p, cat, dup: sameSubj(d), rank: (d === refDay ? 0 : 10) + Math.abs(p - refPeriod) + sameSubj(d) * 6 });
+    }
+  });
+  return out.sort((a, b) => a.rank - b.rank);
+}
+
 // حلول مقترحة: أماكن بديلة فارغة، معلم بديل، أو تبديل مع الحصة المشغولة
 function suggest({ sid, teacher_id, class_id, subject_id, day, period, cur, conflicts }) {
   const out = [];
@@ -68,19 +89,11 @@ function suggest({ sid, teacher_id, class_id, subject_id, day, period, cur, conf
     ? { method: "PUT", url: `/api/schedule/${cur.id}`, body: { day_of_week: d, period_number: p, teacher_id, subject_id } }
     : { method: "POST", url: "/api/schedule", body: { teacher_id, class_id, subject_id, day_of_week: d, period_number: p } };
 
-  // 1) أماكن فارغة للصف والمعلم معاً
-  const free = [];
-  svc.getWorkingDays(sid).forEach((d) => {
-    const n = resolve(cls, d);
-    for (let p = 1; p <= n; p++) {
-      if (d === day && p === period) continue;
-      const k = `${d}-${p}`;
-      if (cBusy.has(k) || tBusy.has(k)) continue;
-      free.push({ d, p, rank: (d === day ? 0 : 10) + Math.abs(p - period) + sameSubjDay(d) * 6 });
-    }
-  });
-  free.sort((x, y) => x.rank - y.rank).slice(0, 4).forEach((f) => out.push({
-    kind: "move", label: `${cur ? "انقل الحصة" : "ضعها"} إلى ${slotLabel(f.d, f.p)}${sameSubjDay(f.d) ? " (المادة موجودة بهذا اليوم)" : ""}`, apply: apiMove(f.d, f.p) }));
+  // 1) أماكن فارغة: درس آخر بنفس اليوم / نفس الدرس بيوم آخر / يوم ودرس مختلفان
+  const free = freeSlotsFor(sid, cls, teacher_id, exIds, subject_id, day, period);
+  const CAT = { sameDay: "درس آخر بنفس اليوم", sameLesson: "يوم آخر بنفس الدرس", other: "يوم ودرس آخر" };
+  ["sameDay", "sameLesson", "other"].forEach((cat) => free.filter((f) => f.cat === cat).slice(0, 2).forEach((f) => out.push({
+    kind: "move", label: `${cur ? "انقل الحصة" : "ضعها"} إلى ${slotLabel(f.d, f.p)} (${CAT[cat]})${f.dup ? " — المادة موجودة بهذا اليوم" : ""}`, apply: apiMove(f.d, f.p) })));
 
   // 2) معلم بديل متاح بنفس التوقيت (إذا كان التعارض بسبب المعلم)
   if (conflicts.some((c) => c.type === "teacher_busy") && !conflicts.some((c) => c.type === "class_busy")) {
@@ -108,6 +121,34 @@ function suggest({ sid, teacher_id, class_id, subject_id, day, period, cur, conf
           apply: { method: "POST", url: "/api/schedule/swap", body: { a: cur.id, b: y.id } } });
     }
   }
+  // 3ب) سلسلة: حرّك الحصة/الحصص المعطِّلة (صف و/أو معلم) لأماكن فارغة ثم ضع هذه الحصة مكانها
+  if (cur && conflicts.length) {
+    const blockers = conflicts.map((c) => c.slot_id).filter((id, i, arr) => id && id !== cur.id && arr.indexOf(id) === i);
+    const rowsB = blockers.map((id) => db.prepare(
+      `SELECT s.*, sub.name AS subject_name, c.name AS class_name FROM schedule s JOIN subjects sub ON sub.id=s.subject_id JOIN school_classes c ON c.id=s.class_id WHERE s.id=? AND s.school_id=?`).get(id, sid));
+    if (blockers.length && blockers.length <= 2 && rowsB.every((y) => y && y.lock_kind !== "manual")) {
+      for (let variant = 0; variant < 2; variant++) {
+        const used = [`${day}-${period}`], steps = [], parts = [];
+        let okAll = true;
+        for (const y of rowsB) {
+          const ycls = owned("classes", y.class_id, sid);
+          const cand = ycls && freeSlotsFor(sid, ycls, y.teacher_id, [y.id], y.subject_id, y.day_of_week, y.period_number, used);
+          const pick = cand && cand[variant] ? cand[variant] : cand && cand[0];
+          if (!pick) { okAll = false; break; }
+          used.push(`${pick.d}-${pick.p}`);
+          steps.push({ id: y.id, day_of_week: pick.d, period_number: pick.p });
+          parts.push(`«${y.subject_name}» (${y.class_name}) إلى ${slotLabel(pick.d, pick.p)}`);
+        }
+        if (!okAll) break;
+        if (variant === 1 && out.some((o) => o.kind === "chain" && JSON.stringify(o.apply.body.steps) === JSON.stringify([...steps, { id: cur.id, day_of_week: day, period_number: period, teacher_id, subject_id }]))) break;
+        out.push({
+          kind: "chain",
+          label: `حرّك ${parts.join(" و")} ثم ضع هذه الحصة في ${slotLabel(day, period)}`,
+          apply: { method: "POST", url: "/api/schedule/chain", body: { steps: [...steps, { id: cur.id, day_of_week: day, period_number: period, teacher_id, subject_id }] } } });
+      }
+    }
+  }
+
   // 4) إضافة جديدة فوق خانة مشغولة: استبدل الحصة الموجودة (تعديلها إلى المادة/المعلم الجديدين)
   if (cb && !cur) {
     const y = db.prepare(
@@ -256,9 +297,12 @@ router.post("/swap", requireDraft, (req, res) => {
   if (e1.invalid || e2.invalid || e1.conflicts.length || e2.conflicts.length) {
     const conflicts = [...e1.conflicts, ...e2.conflicts];
     const error = e1.invalid || e2.invalid || conflicts.map((c) => c.message).join(" — ");
-    const suggestions = (e1.invalid || e2.invalid) ? [] : [
-      ...suggest({ sid, teacher_id: a.teacher_id, class_id: a.class_id, subject_id: a.subject_id, day: b.day_of_week, period: b.period_number, cur: a, conflicts: [{ type: "teacher_busy" }] }).filter((x) => x.kind === "move"),
-    ];
+    let suggestions = [];
+    if (!e1.invalid && !e2.invalid) {
+      // لو لم يمكن التبديل: اقتراحات لنقل الحصة المسحوبة إلى مكان آخر مناسب (نفس اليوم/يوم آخر/درس آخر + سلاسل نقل)
+      const real = analyze({ sid, teacher_id: a.teacher_id, class_id: a.class_id, day: b.day_of_week, period: b.period_number, excludeIds: [a.id] });
+      suggestions = suggest({ sid, teacher_id: a.teacher_id, class_id: a.class_id, subject_id: a.subject_id, day: b.day_of_week, period: b.period_number, cur: a, conflicts: real.conflicts });
+    }
     return res.status(409).json({ error, conflicts, suggestions });
   }
   db.transaction(() => {
@@ -268,6 +312,26 @@ router.post("/swap", requireDraft, (req, res) => {
     up.run(b.day_of_week, b.period_number, a.id); // a إلى مكان b
   })();
   audit(sid, "schedule_swap", { a: a.id, b: b.id });
+  res.json({ ok: true });
+});
+
+// تنفيذ عدة نقلات متتالية كوحدة واحدة (تُلغى كلها إن فشلت إحداها)
+router.post("/chain", requireDraft, (req, res) => {
+  const sid = req.schoolId, steps = req.body.steps;
+  if (!Array.isArray(steps) || !steps.length || steps.length > 4) return res.status(400).json({ error: "خطوات غير صحيحة" });
+  try {
+    db.transaction(() => {
+      steps.forEach((st, i) => {
+        const cur = owned("schedule", st.id, sid);
+        if (!cur) throw new Error(`الخطوة ${i + 1}: الحصة غير موجودة`);
+        const n = { teacher_id: st.teacher_id ?? cur.teacher_id, subject_id: st.subject_id ?? cur.subject_id, day: Number(st.day_of_week), period: Number(st.period_number) };
+        const an = analyze({ sid, teacher_id: n.teacher_id, class_id: cur.class_id, day: n.day, period: n.period, excludeIds: [cur.id] });
+        if (an.invalid || an.conflicts.length) throw new Error(`الخطوة ${i + 1}: ${an.invalid || an.conflicts.map((c) => c.message).join(" — ")}`);
+        db.prepare("UPDATE schedule SET teacher_id=?, subject_id=?, day_of_week=?, period_number=? WHERE id=? AND school_id=?").run(n.teacher_id, n.subject_id, n.day, n.period, cur.id, sid);
+      });
+    })();
+  } catch (e) { return res.status(409).json({ error: e.message, conflicts: [], suggestions: [] }); }
+  audit(sid, "schedule_chain", { steps });
   res.json({ ok: true });
 });
 

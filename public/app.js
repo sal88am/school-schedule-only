@@ -351,11 +351,13 @@ async function loadShifts() {
       <label class="field-label">وقت بداية الحصة الأولى</label><input type="time" name="start_time" value="${s.start_time}" />
       <label class="field-label">عدد الحصص اليومي</label><input type="number" name="period_count" min="1" max="12" value="${s.period_count}" />
       <label class="field-label">مدة الحصة (دقيقة)</label><input type="number" name="period_minutes" min="10" max="120" value="${s.period_minutes}" />
-      <label class="field-label">الاستراحة بين الحصص (دقيقة)</label><input type="number" name="break_minutes" min="0" max="60" value="${s.break_minutes}" />
+      <label class="field-label">الاستراحة بعد كل درس (دقيقة) — حدّد كل استراحة لوحدها</label>
+      <div class="break-grid">${Array.from({ length: Math.max(0, s.period_count - 1) }, (_, i) => `<label class="break-cell"><span>بعد ${lessonName(i + 1)}</span><input type="number" name="break_${i + 1}" min="0" max="60" value="${(s.breaks && s.breaks[i] != null) ? s.breaks[i] : s.break_minutes}" /></label>`).join("") || '<p class="muted-text">درس واحد فقط — لا توجد استراحات.</p>'}</div>
+      <div class="form-row break-all"><input type="number" class="break-all-input" min="0" max="60" placeholder="دقائق" style="width:90px" /><button class="btn btn-ghost" type="button" onclick="fillBreaks('${s.shift_type}')">تعيين الكل بنفس القيمة</button></div>
       <button class="btn btn-accent" onclick="saveShift('${s.shift_type}')">حفظ</button>
       <p class="muted-text shift-msg"></p>
     </div>
-    <div class="shift-preview">${cfg.preview[s.shift_type].map((p) => `<div><span class="period-tab sm">${p.period}</span><span class="mono">${rng12(p.start, p.end)}</span></div>`).join("")}</div>
+    <div class="shift-preview">${cfg.preview[s.shift_type].map((p) => `<div><span class="period-tab sm">${p.period}</span><span class="mono">${rng12(p.start, p.end)}</span>${p.break_after ? `<small class="brk">استراحة ${p.break_after} د</small>` : ""}</div>`).join("")}</div>
   </div>`).join("");
   const map = Object.fromEntries(cfg.dayConfig.map((d) => [d.day_of_week, d.shift_type]));
   $("dayShiftGrid").innerHTML = DAY_NAMES.map((n, i) => `<label class="day-cell"><span>${n}</span>
@@ -390,11 +392,19 @@ $("ovAddBtn").addEventListener("click", () => {
   if (!v) { $("dayPeriodsResult").textContent = "اكتب عدد الدروس"; return; }
   saveDayPeriods(Number($("ovDay").value), Number($("ovClass").value), v);
 });
+function fillBreaks(type) {
+  const card = document.querySelector(`[data-shift="${type}"]`);
+  const v = card.querySelector(".break-all-input").value;
+  if (v === "") return;
+  card.querySelectorAll('[name^="break_"]').forEach((el) => (el.value = v));
+}
 async function saveShift(type) {
   const card = document.querySelector(`[data-shift="${type}"]`);
   const g = (n) => card.querySelector(`[name=${n}]`).value;
   try {
-    await put(`/api/schedule-config/shift/${type}`, { start_time: g("start_time"), period_count: +g("period_count"), period_minutes: +g("period_minutes"), break_minutes: +g("break_minutes") });
+    const n = +g("period_count");
+    const breaks = Array.from({ length: Math.max(0, n - 1) }, (_, i) => { const el = card.querySelector(`[name=break_${i + 1}]`); return el ? +el.value : 5; });
+    await put(`/api/schedule-config/shift/${type}`, { start_time: g("start_time"), period_count: n, period_minutes: +g("period_minutes"), break_minutes: breaks.length ? breaks[0] : 5, breaks });
     await loadShifts();
     document.querySelector(`[data-shift="${type}"] .shift-msg`).textContent = "تم الحفظ وتحديث الأوقات ✅";
   } catch (e) { card.querySelector(".shift-msg").textContent = e.message; }
@@ -521,7 +531,7 @@ function showConflict(err) {
   const d = err.data || {};
   _sugg = d.suggestions || [];
   $("conflictBody").innerHTML = `${(d.conflicts || []).length ? `<ul class="issue-list">${d.conflicts.map((c) => `<li class="error">${esc(c.message)}</li>`).join("")}</ul>` : `<p class="conflict-msg">${esc(err.message)}</p>`}
-    ${_sugg.length ? `<h4>حلول مقترحة (اضغط لتطبيق الحل)</h4><div class="sug-btns">${_sugg.map((x, i) => `<button class="btn suggest-btn kind-${x.kind}" onclick="applySuggestion(${i})">${x.kind === "swap" ? "🔁" : x.kind === "teacher" ? "👤" : x.kind === "replace" ? "♻️" : "➡️"} ${esc(x.label)}</button>`).join("")}</div>`
+    ${_sugg.length ? `<h4>حلول مقترحة (${_sugg.length}) — اضغط لتطبيق الحل</h4><div class="sug-btns">${_sugg.map((x, i) => `<button class="btn suggest-btn kind-${x.kind}" onclick="applySuggestion(${i})">${{ swap: "🔁", teacher: "👤", replace: "♻️", chain: "🧩", move: "➡️" }[x.kind] || "➡️"} ${esc(x.label)}</button>`).join("")}</div>`
       : '<p class="muted-text">لا توجد حلول تلقائية — جرّب خانة أخرى أو معلماً آخر.</p>'}
     <p id="conflictErr" class="error-text"></p>`;
   $("slotModal").classList.add("hidden");
@@ -583,7 +593,7 @@ const workDays = () => Object.keys(_dayPeriods).map(Number).sort((x, y) => x - y
 function slotHtml(s, perspective, editable, day, period) {
   const meta = perspective === "teacher" ? s.class_name : s.teacher_name;
   const handlers = editable ? `draggable="true" ondragstart="dragSlot(event, ${s.id})" onclick="openSlot(${day}, ${period}, ${s.id})"` : "";
-  return `<div class="slot" ${handlers} style="--slot-color:${esc(s.subject_color || "#2F4858")}">${s.lock_kind ? `<span class="pin" title="${s.lock_kind === "manual" ? "مثبّتة — لا تتغيّر عند إعادة التوليد" : "مثبّتة بقاعدة"}">📌</span>` : ""}<span class="subj">${esc(s.subject_name)}</span><span class="meta">${esc(meta)}</span></div>`;
+  return `<div class="slot" ${handlers} style="--slot-color:${esc(s.subject_color || "#2F4858")}">${s.lock_kind ? `<span class="pin" title="${s.lock_kind === "manual" ? "مثبّتة — لا تتغيّر عند إعادة التوليد" : "مثبّتة بقاعدة"}">📌</span>` : ""}<span class="subj">${esc(s.subject_name)}</span><span class="meta">${perspective === "teacher" ? "🏫" : "👤"} ${esc(meta)}</span></div>`;
 }
 
 // جدول أسبوعي لصف أو معلم: الأعمدة = أيام الدوام، الصفوف = الدرس الأول، الثاني...

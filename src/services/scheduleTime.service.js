@@ -4,21 +4,31 @@ function toMinutes(t) { const [h, m] = String(t).split(":").map(Number); return 
 function toTime(total) { return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`; }
 
 // دالة نقية: تحسب حصص الشفت (08:00 + 40 + 5 → 08:00–08:40, 08:45–09:25 ...)
+function parseBreaks(raw) {
+  if (Array.isArray(raw)) return raw;
+  try { const a = JSON.parse(raw || "null"); return Array.isArray(a) ? a : null; } catch (e) { return null; }
+}
+// الاستراحة بعد الدرس i (1-based): من القائمة المخصّصة إن وُجدت وإلا الافتراضية
+function breakAfter(shift, i) {
+  const b = parseBreaks(shift.breaks);
+  const v = b && b[i - 1] !== undefined && b[i - 1] !== null ? Number(b[i - 1]) : Number(shift.break_minutes);
+  return Number.isFinite(v) ? v : 0;
+}
 function buildPeriods(shift, count) {
   const n = count || shift.period_count;
   const out = [];
   let cursor = toMinutes(shift.start_time);
   for (let i = 1; i <= n; i++) {
     const end = cursor + shift.period_minutes;
-    out.push({ period: i, start: toTime(cursor), end: toTime(end) });
-    cursor = end + shift.break_minutes;
+    out.push({ period: i, start: toTime(cursor), end: toTime(end), break_after: i < n ? breakAfter(shift, i) : 0 });
+    cursor = end + breakAfter(shift, i);
   }
   return out;
 }
 
 // كل الدوال مقيّدة بمدرسة (schoolId)
 function getShifts(sid) {
-  return db.prepare("SELECT * FROM school_shifts WHERE school_id = ?").all(sid);
+  return db.prepare("SELECT * FROM school_shifts WHERE school_id = ?").all(sid).map((r) => ({ ...r, breaks: parseBreaks(r.breaks) }));
 }
 function getDayShiftMap(sid) {
   const shifts = Object.fromEntries(getShifts(sid).map((s) => [s.shift_type, s]));
@@ -79,4 +89,4 @@ function getPeriodTime(sid, day, period) {
   return p ? { start_time: p.start, end_time: p.end } : { start_time: null, end_time: null };
 }
 
-module.exports = { periodsResolver, getOverrides, getDayMaxPeriods, classPeriodsMap, buildPeriods, getShifts, getDayShiftMap, getWorkingDays, getPeriodsPerDayForClass, computeDayPeriods, getPeriodTime, toMinutes, toTime };
+module.exports = { breakAfter, periodsResolver, getOverrides, getDayMaxPeriods, classPeriodsMap, buildPeriods, getShifts, getDayShiftMap, getWorkingDays, getPeriodsPerDayForClass, computeDayPeriods, getPeriodTime, toMinutes, toTime };

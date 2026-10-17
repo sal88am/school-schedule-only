@@ -174,6 +174,54 @@ async function test(n, f) { try { await f(); console.log("✓", n); } catch (e) 
     assert(ok(await call("GET", "/api/fixed-slots", null, A)).length >= 1);
   });
 
+  await test("استراحة مخصّصة بين كل درسين تغيّر الأوقات", async () => {
+    ok(await call("PUT", "/api/schedule-config/shift/morning", { breaks: [5, 10, 5, 15, 5] }, A));
+    const dp = ok(await call("GET", "/api/schedule-config/day-periods", null, A));
+    const t = dp[2].map((p) => p.start); // الثلاثاء صباحي، 6 دروس
+    assert.deepStrictEqual(t.slice(0, 6), ["08:00", "08:45", "09:35", "10:20", "11:15", "12:00"]);
+    assert.strictEqual(ok(await call("GET", "/api/schedule-config", null, A)).shifts.find((x) => x.shift_type === "morning").breaks.length, 5);
+    assert.strictEqual((await call("PUT", "/api/schedule-config/shift/morning", { breaks: [5, -1] }, A)).status, 400);
+    assert.strictEqual((await call("PUT", "/api/schedule-config/shift/morning", { breaks: [5, 99] }, A)).status, 400);
+    // الإرجاع للافتراضي
+    ok(await call("PUT", "/api/schedule-config/shift/morning", { breaks: null }, A));
+    assert.strictEqual(ok(await call("GET", "/api/schedule-config/day-periods", null, A))[2][1].start, "08:45");
+  });
+  await test("تعارض بالسحب: عدة اقتراحات متنوعة (يوم آخر / درس آخر / سلسلة نقل) وتنفيذ السلسلة ذرّي", async () => {
+    ok(await call("POST", "/api/schedule/auto-generate", { seed: 4242 }, A));
+    let s = ok(await call("GET", "/api/schedule", null, A));
+    const mine = s.filter((r) => r.class_id === c3 && !r.lock_kind);
+    for (const r of mine.slice(-3)) await call("DELETE", `/api/schedule/${r.id}`, null, A); // نفتح خانات فارغة
+    s = ok(await call("GET", "/api/schedule", null, A));
+    const rows = s.filter((r) => r.class_id === c3 && !r.lock_kind);
+    const x = rows[0], y = rows.find((r) => r.id !== x.id && r.day_of_week !== x.day_of_week);
+    const r = await call("PUT", `/api/schedule/${x.id}`, { day_of_week: y.day_of_week, period_number: y.period_number }, A);
+    assert.strictEqual(r.status, 409);
+    const kinds = r.body.suggestions.map((g) => g.kind);
+    assert(r.body.suggestions.length >= 3, `only ${r.body.suggestions.length}: ${kinds}`);
+    assert(kinds.includes("move") && kinds.includes("chain"), kinds.join(","));
+    const chain = r.body.suggestions.find((g) => g.kind === "chain");
+    const done = await call(chain.apply.method, chain.apply.url, chain.apply.body, A);
+    assert.strictEqual(done.status, 200, JSON.stringify(done.body));
+    const after = ok(await call("GET", "/api/schedule", null, A));
+    const nx = after.find((q) => q.id === x.id);
+    assert(nx.day_of_week === y.day_of_week && nx.period_number === y.period_number);
+    // الذرّية: سلسلة بخطوة ثانية خاطئة لا تُطبّق الأولى
+    const free = after.find((q) => q.id === y.id);
+    const bad = await call("POST", "/api/schedule/chain", { steps: [{ id: free.id, day_of_week: free.day_of_week, period_number: 1 }, { id: x.id, day_of_week: 6, period_number: 1 }] }, A);
+    assert.strictEqual(bad.status, 409);
+    const again = ok(await call("GET", "/api/schedule", null, A)).find((q) => q.id === free.id);
+    assert(again.day_of_week === free.day_of_week && again.period_number === free.period_number, "الخطوة الأولى طُبّقت رغم فشل الثانية");
+  });
+  await test("سحب فوق خانة مشغولة لا يمكن تبديلها: اقتراحات بديلة بدل الخطأ فقط", async () => {
+    const s = ok(await call("GET", "/api/schedule", null, A));
+    // ابحث عن زوج لا يقبل التبديل
+    for (const a of s.filter((r) => r.class_id === c1 && !r.lock_kind).slice(0, 12)) for (const b of s.filter((r) => r.class_id === c1 && r.id !== a.id).slice(0, 12)) {
+      const r = await call("POST", "/api/schedule/swap", { a: a.id, b: b.id }, A);
+      if (r.status === 409) { assert(Array.isArray(r.body.suggestions)); assert(r.body.error); return; }
+      if (r.status === 200) await call("POST", "/api/schedule/swap", { a: a.id, b: b.id }, A); // أرجعه
+    }
+  });
+
   console.log(failed ? `\n${failed} اختبار فشل` : "\nكل اختبارات v5 نجحت");
   process.exit(failed ? 1 : 0);
 })();

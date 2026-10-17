@@ -66,9 +66,19 @@ router.put("/shift/:type", (req, res) => {
   if (!(count >= 1 && count <= 12)) return res.status(400).json({ error: "عدد الحصص بين 1 و 12" });
   if (!(mins >= 10 && mins <= 120)) return res.status(400).json({ error: "مدة الحصة بين 10 و 120 دقيقة" });
   if (!(brk >= 0 && brk <= 60)) return res.status(400).json({ error: "مدة الاستراحة بين 0 و 60 دقيقة" });
-  db.prepare("UPDATE school_shifts SET start_time = ?, period_count = ?, period_minutes = ?, break_minutes = ? WHERE school_id = ? AND shift_type = ?")
-    .run(start, count, mins, brk, sid, shift.shift_type);
-  audit(sid, "shift_updated", { type: shift.shift_type, start, count, mins, brk });
+  // استراحة مخصّصة بعد كل درس (اختياري): مصفوفة أرقام 0..60
+  let breaks = shift.breaks;
+  if (b.breaks !== undefined) {
+    if (b.breaks === null) breaks = null;
+    else {
+      if (!Array.isArray(b.breaks) || b.breaks.length > 11 || b.breaks.some((x) => !Number.isInteger(Number(x)) || Number(x) < 0 || Number(x) > 60))
+        return res.status(400).json({ error: "مدة كل استراحة بين 0 و 60 دقيقة" });
+      breaks = JSON.stringify(b.breaks.map(Number));
+    }
+  }
+  db.prepare("UPDATE school_shifts SET start_time = ?, period_count = ?, period_minutes = ?, break_minutes = ?, breaks = ? WHERE school_id = ? AND shift_type = ?")
+    .run(start, count, mins, brk, breaks, sid, shift.shift_type);
+  audit(sid, "shift_updated", { type: shift.shift_type, start, count, mins, brk, breaks });
   res.json(snapshot(sid));
 });
 
