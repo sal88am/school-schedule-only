@@ -392,3 +392,7 @@ details summary { cursor: pointer; font-size: 14px; font-weight: 600; margin-top
 .tt-days td .cell-time { white-space: nowrap; font-size: 11.5px; padding: 2px 8px; gap: 4px; }
 .tt-days td .cell-time span { white-space: nowrap; }
 .compact .tt-days td { min-width: 130px; }
+
+.pin-btn { border: 0; background: transparent; cursor: pointer; padding: 0 2px; line-height: 1; opacity: .25; filter: grayscale(1); transition: opacity .15s; }
+.slot:hover .pin-btn { opacity: .7; }
+.pin-btn.on { opacity: 1; filter: none; }

@@ -222,6 +222,29 @@ async function test(n, f) { try { await f(); console.log("✓", n); } catch (e) 
     }
   });
 
+  await test("تثبيت الكل / فك التثبيت (مدرسة وصف) وتغيير اسم مستخدم معلم", async () => {
+    const all = ok(await call("GET", "/api/schedule", null, A));
+    const pr = ok(await call("POST", "/api/schedule/pin-all", { pinned: true }, A));
+    assert(pr.changed >= 0);
+    assert(ok(await call("GET", "/api/schedule", null, A)).every((r) => r.lock_kind === "manual"));
+    const un = ok(await call("POST", "/api/schedule/pin-all", { pinned: false, class_id: c1 }, A));
+    const now = ok(await call("GET", "/api/schedule", null, A));
+    assert(now.filter((r) => r.class_id === c1).every((r) => !r.lock_kind));
+    assert(now.filter((r) => r.class_id !== c1).every((r) => r.lock_kind === "manual") || all.every((r) => r.class_id === c1));
+    ok(await call("POST", "/api/schedule/pin-all", { pinned: false }, A));
+    assert(ok(await call("GET", "/api/schedule", null, A)).every((r) => !r.lock_kind));
+    // صف من مدرسة أخرى مرفوض
+    assert.strictEqual((await call("POST", "/api/schedule/pin-all", { pinned: true, class_id: 99999 }, A)).status, 404);
+    // اسم مستخدم المعلم
+    const t = ok(await call("GET", "/api/teachers", null, A))[0];
+    const u = ok(await call("POST", "/api/users", { teacher_id: t.id, username: "teach.one", password: "Password123" }, A), 201);
+    ok(await call("PUT", `/api/users/${u.id}`, { username: "teach.renamed" }, A));
+    assert.strictEqual((await call("POST", "/api/auth/login", { username: "teach.one", password: "Password123" })).status, 401);
+    assert.strictEqual((await call("POST", "/api/auth/login", { username: "teach.renamed", password: "Password123" })).status, 200);
+    assert.strictEqual((await call("PUT", `/api/users/${u.id}`, { username: "admin" }, A)).status, 400); // مستخدم مسبقاً
+    assert.strictEqual((await call("PUT", `/api/users/${u.id}`, { username: "a b" }, A)).status, 400);
+  });
+
   console.log(failed ? `\n${failed} اختبار فشل` : "\nكل اختبارات v5 نجحت");
   process.exit(failed ? 1 : 0);
 })();

@@ -336,6 +336,19 @@ router.post("/chain", requireDraft, (req, res) => {
 });
 
 // تثبيت/إلغاء تثبيت حصة (لا تتغيّر عند إعادة التوليد)
+// تثبيت/إلغاء تثبيت مجموعة حصص: كل المدرسة، أو صف، أو معلم
+router.post("/pin-all", requireDraft, (req, res) => {
+  const pinned = !!req.body.pinned;
+  const where = ["school_id=?"], args = [req.schoolId];
+  if (req.body.class_id) { if (!owned("classes", req.body.class_id, req.schoolId)) return res.status(404).json({ error: "الصف غير موجود" }); where.push("class_id=?"); args.push(Number(req.body.class_id)); }
+  if (req.body.teacher_id) { if (!owned("teachers", req.body.teacher_id, req.schoolId)) return res.status(404).json({ error: "المعلم غير موجود" }); where.push("teacher_id=?"); args.push(Number(req.body.teacher_id)); }
+  const r = pinned
+    ? db.prepare(`UPDATE schedule SET lock_kind='manual' WHERE ${where.join(" AND ")} AND IFNULL(lock_kind,'')<>'manual'`).run(...args)
+    : db.prepare(`UPDATE schedule SET lock_kind=NULL WHERE ${where.join(" AND ")} AND lock_kind IS NOT NULL`).run(...args);
+  audit(req.schoolId, pinned ? "schedule_pin_all" : "schedule_unpin_all", { changed: Number(r.changes), class_id: req.body.class_id || null, teacher_id: req.body.teacher_id || null });
+  res.json({ ok: true, changed: Number(r.changes), pinned });
+});
+
 router.post("/:id/pin", requireDraft, (req, res) => {
   const cur = owned("schedule", req.params.id, req.schoolId);
   if (!cur) return res.status(404).json({ error: "الحصة غير موجودة" });

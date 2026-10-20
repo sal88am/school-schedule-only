@@ -29,6 +29,14 @@ router.post("/", (req, res) => {
 router.put("/:id", (req, res) => {
   const u = owned("users", req.params.id, req.schoolId);
   if (!u || u.role !== "teacher") return res.status(404).json({ error: "الحساب غير موجود" });
+  if (req.body.username !== undefined) {
+    const nu = String(req.body.username).trim();
+    if (!USERNAME_RE.test(nu)) return res.status(400).json({ error: "اسم المستخدم: 3–40 حرفاً إنكليزياً أو أرقاماً (._-)" });
+    if (db.prepare("SELECT 1 FROM users WHERE username = ? AND id <> ?").get(nu, u.id)) return res.status(400).json({ error: "اسم المستخدم مستخدم مسبقاً" });
+    db.prepare("UPDATE users SET username = ? WHERE id = ?").run(nu, u.id);
+    db.prepare("DELETE FROM sessions WHERE user_id = ?").run(u.id);
+    audit(req.schoolId, "teacher_username_changed", { id: u.id, from: u.username, to: nu });
+  }
   if (req.body.password !== undefined) {
     if (String(req.body.password).length < 8) return res.status(400).json({ error: "كلمة المرور 8 أحرف على الأقل" });
     db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hashPassword(req.body.password), u.id);

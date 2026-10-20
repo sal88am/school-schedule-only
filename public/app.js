@@ -207,13 +207,18 @@ async function loadTeachers() {
   const cname = Object.fromEntries(classes.map((c) => [c.id, c.name]));
   $("teachersTable").innerHTML = `<table><thead><tr><th>الاسم</th><th>المواد</th><th>معلم صف</th><th>الهاتف</th><th>حساب الدخول</th><th></th></tr></thead><tbody>${
     teachers.map((t) => `<tr><td>${esc(t.name)}</td><td>${t.subjects.map((s) => esc(s.name)).join("، ") || "—"}</td><td>${esc(cname[t.class_teacher_of] || "—")}</td><td>${esc(t.phone || "—")}</td>
-    <td>${t.account_username ? `<span class="mono">${esc(t.account_username)}</span> <button class="btn btn-ghost" onclick="resetTeacherPw(${t.id})">كلمة سر</button>` : `<button class="btn btn-ghost" onclick="createTeacherAccount(${t.id})">إنشاء حساب</button>`}</td>
+    <td>${t.account_username ? `<span class="mono">${esc(t.account_username)}</span> <button class="btn btn-ghost" onclick="editTeacherUsername(${t.id}, '${esc(t.account_username)}')">اسم الدخول</button> <button class="btn btn-ghost" onclick="resetTeacherPw(${t.id})">كلمة سر</button>` : `<button class="btn btn-ghost" onclick="createTeacherAccount(${t.id})">إنشاء حساب</button>`}</td>
     <td><button class="btn btn-ghost" onclick="editTeacher(${t.id})">تعديل</button> <button class="btn btn-danger" onclick="deleteTeacher(${t.id})">حذف</button></td></tr>`).join("") || emptyRow(6)}</tbody></table>`;
 }
 async function createTeacherAccount(id) {
   const username = prompt("اسم المستخدم للمعلم (إنكليزي/أرقام، 3 أحرف+):"); if (!username) return;
   const password = prompt("كلمة المرور (8 أحرف على الأقل):"); if (!password) return;
   try { await post("/api/users", { teacher_id: id, username, password }); loadTeachers(); } catch (e) { alert(e.message); }
+}
+async function editTeacherUsername(teacherId, current) {
+  const users = await apiFetch("/api/users"); const u = users.find((x) => x.teacher_id === teacherId); if (!u) return;
+  const username = prompt("اسم المستخدم الجديد (إنكليزي/أرقام، 3 أحرف+):", current || u.username); if (!username || username === u.username) return;
+  try { await put(`/api/users/${u.id}`, { username: username.trim() }); loadTeachers(); toast("تم تغيير اسم المستخدم — سيحتاج المعلم لتسجيل الدخول به من جديد"); } catch (e) { alert(e.message); }
 }
 async function resetTeacherPw(teacherId) {
   const users = await apiFetch("/api/users"); const u = users.find((x) => x.teacher_id === teacherId); if (!u) return;
@@ -595,8 +600,23 @@ const workDays = () => Object.keys(_dayPeriods).map(Number).sort((x, y) => x - y
 function slotHtml(s, perspective, editable, day, period) {
   const meta = perspective === "teacher" ? s.class_name : s.teacher_name;
   const handlers = editable ? `draggable="true" ondragstart="dragSlot(event, ${s.id})" onclick="openSlot(${day}, ${period}, ${s.id})"` : "";
-  return `<div class="slot" ${handlers} style="--slot-color:${esc(s.subject_color || "#2F4858")}">${s.lock_kind ? `<span class="pin" title="${s.lock_kind === "manual" ? "مثبّتة — لا تتغيّر عند إعادة التوليد" : "مثبّتة بقاعدة"}">📌</span>` : ""}<span class="s-txt"><span class="subj">${esc(s.subject_name)}</span><span class="meta">${esc(meta)}</span></span><span class="s-ico">${TT.subject(s.subject_name, 34)}</span></div>`;
+  return `<div class="slot" ${handlers} style="--slot-color:${esc(s.subject_color || "#2F4858")}">${editable ? `<button type="button" class="pin pin-btn ${s.lock_kind ? "on" : ""}" title="${s.lock_kind ? "مثبّتة — اضغط لفك التثبيت" : "اضغط لتثبيت الحصة"}" onclick="event.stopPropagation(); togglePin(${s.id}, ${s.lock_kind ? "false" : "true"})">📌</button>` : s.lock_kind ? `<span class="pin" title="مثبّتة">📌</span>` : ""}<span class="s-txt"><span class="subj">${esc(s.subject_name)}</span><span class="meta">${esc(meta)}</span></span><span class="s-ico">${TT.subject(s.subject_name, 34)}</span></div>`;
 }
+async function togglePin(id, pinned) {
+  try { await post(`/api/schedule/${id}/pin`, { pinned }); await refreshSchedule(); } catch (e) { toast(e.message); }
+}
+// تثبيت/فك تثبيت كل الحصص الظاهرة (حسب الفلتر: صف / معلم / كل المدرسة)
+async function pinAll(pinned) {
+  const { type, value } = currentFilter();
+  const body = { pinned };
+  let scope = "كل حصص المدرسة";
+  if (type === "class" && value) { body.class_id = Number(value); scope = "حصص هذا الصف"; }
+  else if (type === "teacher" && value) { body.teacher_id = Number(value); scope = "حصص هذا المعلم"; }
+  if (!confirm(`${pinned ? "تثبيت" : "فك تثبيت"} ${scope}؟`)) return;
+  try { const r = await post("/api/schedule/pin-all", body); toast(`${pinned ? "تم تثبيت" : "تم فك تثبيت"} ${r.changed} حصة`); await refreshSchedule(); } catch (e) { toast(e.message); }
+}
+$("pinAllBtn").addEventListener("click", () => pinAll(true));
+$("unpinAllBtn").addEventListener("click", () => pinAll(false));
 const timePill = (pt) => (pt ? `<div class="cell-time">${TT.clock(13)}<span>${rng12(pt.start, pt.end)}</span></div>` : "");
 
 // جدول أسبوعي لصف أو معلم: الأعمدة = أيام الدوام، الصفوف = الدرس الأول، الثاني...
