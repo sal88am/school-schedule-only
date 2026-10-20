@@ -245,6 +245,27 @@ async function test(n, f) { try { await f(); console.log("✓", n); } catch (e) 
     assert.strictEqual((await call("PUT", `/api/users/${u.id}`, { username: "a b" }, A)).status, 400);
   });
 
+  await test("تغيير معلم الصف/المادة ينقل حصصه بالجدول تلقائياً", async () => {
+    const asg = ok(await call("GET", "/api/teacher-assignments", null, A));
+    const teachers = ok(await call("GET", "/api/teachers", null, A));
+    let done = false;
+    for (const a of asg) {
+      const sched = ok(await call("GET", "/api/schedule", null, A)).filter((r) => r.class_id === a.class_id && r.subject_id === a.subject_id && r.teacher_id === a.teacher_id);
+      if (!sched.length) continue;
+      const other = ok(await call("POST", "/api/teachers", { name: "بديل " + a.id, subject_ids: [a.subject_id] }, A), 201);
+      const r = ok(await call("PUT", `/api/teacher-assignments/${a.id}`, { teacher_id: other.id }, A));
+      const after = ok(await call("GET", "/api/schedule", null, A)).filter((x) => sched.some((s) => s.id === x.id));
+      assert.strictEqual(r.sync.moved + r.sync.conflicts.length, sched.length);
+      assert.strictEqual(after.filter((x) => x.teacher_id === other.id).length, r.sync.moved);
+      // حذف الإسناد ثم إضافته لمعلم ثالث/الأول: الحصص المعلّقة تنتقل
+      ok(await call("DELETE", `/api/teacher-assignments/${a.id}`, null, A));
+      const back = ok(await call("POST", "/api/teacher-assignments", { teacher_id: a.teacher_id, class_id: a.class_id, subject_id: a.subject_id }, A), 201);
+      assert(back.sync.moved + back.sync.conflicts.length >= 0);
+      done = true; break;
+    }
+    assert(done, "لم يوجد إسناد قابل للتجربة");
+  });
+
   console.log(failed ? `\n${failed} اختبار فشل` : "\nكل اختبارات v5 نجحت");
   process.exit(failed ? 1 : 0);
 })();

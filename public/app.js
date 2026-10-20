@@ -334,7 +334,7 @@ async function removeCS(id) { await del(`/api/class-subjects/${id}`); renderClas
 $("assignForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target); $("assignError").textContent = "";
-  try { await post("/api/teacher-assignments", { teacher_id: +fd.get("teacher_id"), class_id: +fd.get("class_id"), subject_id: +fd.get("subject_id") }); renderAssignTable(); }
+  try { const r = await post("/api/teacher-assignments", { teacher_id: +fd.get("teacher_id"), class_id: +fd.get("class_id"), subject_id: +fd.get("subject_id") }); $("assignError").textContent = syncMsg(r.sync); renderAssignTable(); }
   catch (err) { $("assignError").textContent = err.message; }
 });
 $("autoAssignBtn").addEventListener("click", async () => {
@@ -342,12 +342,28 @@ $("autoAssignBtn").addEventListener("click", async () => {
   $("assignError").textContent = r.unassigned.length ? `تم إسناد ${r.assigned}. بقي ${r.unassigned.length} بلا معلم مؤهل — أضف المادة لأحد المعلمين.` : `تم إسناد ${r.assigned} مادة تلقائياً ✅`;
   renderAssignTable();
 });
+function syncMsg(sync) {
+  if (!sync) return "";
+  const parts = [];
+  if (sync.moved) parts.push(`انتقلت ${sync.moved} حصة في الجدول إلى المعلم الجديد تلقائياً ✅`);
+  if (sync.conflicts && sync.conflicts.length) parts.push(`⚠ ${sync.conflicts.length} حصة لم تنتقل لأن المعلم الجديد مشغول بنفس الوقت (${sync.conflicts.slice(0, 4).map((c) => `${c.day} الدرس ${c.period}`).join("، ")}) — عدّلها من الجدول`);
+  if (sync.skipped) parts.push("الجدول معتمد — افتح التعديل ثم أعد الإسناد لتنتقل الحصص");
+  else if (sync.orphaned) parts.push(`${sync.orphaned} حصة بقيت باسم المعلم القديم — ستنتقل تلقائياً عند إسناد معلم جديد لهذه المادة`);
+  return parts.join(" · ");
+}
 async function renderAssignTable() {
   const rows = await apiFetch("/api/teacher-assignments");
   $("assignTable").innerHTML = `<table><thead><tr><th>الصف</th><th>المادة</th><th>المعلم</th><th></th></tr></thead><tbody>${
-    rows.map((r) => `<tr><td>${esc(r.class_name)}</td><td>${esc(r.subject_name)}</td><td>${esc(r.teacher_name)}</td><td><button class="btn btn-danger" onclick="removeAssign(${r.id})">حذف</button></td></tr>`).join("") || emptyRow(4)}</tbody></table>`;
+    rows.map((r) => {
+      const qual = _teachers.filter((t) => (t.subjects || []).some((x) => x.id === r.subject_id));
+      return `<tr><td>${esc(r.class_name)}</td><td>${esc(r.subject_name)}</td><td><select onchange="changeAssign(${r.id}, this.value)" title="تغيير المعلم — تنتقل حصصه بالجدول تلقائياً">${qual.map((t) => `<option value="${t.id}" ${t.id === r.teacher_id ? "selected" : ""}>${esc(t.name)}</option>`).join("") || `<option>${esc(r.teacher_name)}</option>`}</select></td><td><button class="btn btn-danger" onclick="removeAssign(${r.id})">حذف</button></td></tr>`;
+    }).join("") || emptyRow(4)}</tbody></table>`;
 }
-async function removeAssign(id) { await del(`/api/teacher-assignments/${id}`); renderAssignTable(); }
+async function changeAssign(id, teacherId) {
+  try { const r = await put(`/api/teacher-assignments/${id}`, { teacher_id: Number(teacherId) }); $("assignError").textContent = syncMsg(r.sync) || "تم تغيير المعلم"; } catch (e) { $("assignError").textContent = e.message; }
+  renderAssignTable();
+}
+async function removeAssign(id) { const r = await del(`/api/teacher-assignments/${id}`); $("assignError").textContent = syncMsg(r.sync); renderAssignTable(); }
 
 // ---------- إعدادات الدوام ----------
 async function loadShifts() {
