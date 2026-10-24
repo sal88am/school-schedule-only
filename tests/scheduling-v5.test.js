@@ -266,6 +266,26 @@ async function test(n, f) { try { await f(); console.log("✓", n); } catch (e) 
     assert(done, "لم يوجد إسناد قابل للتجربة");
   });
 
+  await test("التوليد لا يعطي إلا جداول مكتملة 100% وبدائلها كذلك", async () => {
+    const g = ok(await call("POST", "/api/schedule/auto-generate", {}, A));
+    assert.strictEqual(g.applied, true);
+    assert.strictEqual(g.filled, g.required, "الجدول المطبَّق ناقص");
+    g.alternatives.forEach((a) => assert.strictEqual(a.unfilled, 0, "بديل ناقص"));
+    assert.strictEqual(g.unfilled, 0);
+  });
+  await test("إن استحال الاكتمال لا يُستبدل الجدول الحالي ويُشرح السبب (allowPartial يطبّق الناقص)", async () => {
+    const before = ok(await call("GET", "/api/schedule", null, A)).length;
+    const asg = ok(await call("GET", "/api/teacher-assignments", null, A))[0];
+    ok(await call("DELETE", `/api/teacher-assignments/${asg.id}`, null, A));
+    const g = ok(await call("POST", "/api/schedule/auto-generate", {}, A));
+    assert.strictEqual(g.applied, false);
+    assert(g.suggestions.length >= 1 && g.message);
+    assert.strictEqual(ok(await call("GET", "/api/schedule", null, A)).length, before, "الجدول الحالي تغيّر رغم الفشل");
+    const p = ok(await call("POST", "/api/schedule/auto-generate", { allowPartial: true }, A));
+    assert.strictEqual(p.applied, true); assert(p.unfilled > 0);
+    ok(await call("POST", "/api/teacher-assignments", { teacher_id: asg.teacher_id, class_id: asg.class_id, subject_id: asg.subject_id }, A), 201);
+  });
+
   console.log(failed ? `\n${failed} اختبار فشل` : "\nكل اختبارات v5 نجحت");
   process.exit(failed ? 1 : 0);
 })();

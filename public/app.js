@@ -512,15 +512,20 @@ function toast(msg, ms = 6000) {
 }
 const SUG_ICON = { error: "❌", warn: "⚠️", ok: "✅" };
 function renderGenPanel(r) {
-  const alts = (r.alternatives || []).map((a) => `<div class="alt-card"><div><b>توزيع بديل</b><small>الدرجة ${a.score}/100 · ${a.unfilled ? `${a.unfilled} ناقصة` : "مكتمل"} · يختلف ${a.diffPercent}% عن الحالي</small></div>
+  const alts = (r.alternatives || []).map((a) => `<div class="alt-card"><div><b>توزيع بديل مكتمل ✅</b><small>الدرجة ${a.score}/100 · ${a.unfilled ? `${a.unfilled} ناقصة` : "100% بدون نقص"} · يختلف ${a.diffPercent}% عن الحالي</small></div>
     <button class="btn btn-ghost" onclick="applySeed(${a.seed})">تطبيق</button></div>`).join("");
   const sug = (r.suggestions || []).map((x) => `<li class="${x.level}">${SUG_ICON[x.level] || "💡"} ${esc(x.text)}</li>`).join("");
   $("genPanel").innerHTML = (alts ? `<h4>بدائل جاهزة</h4><div class="alt-list">${alts}</div>` : "") + (sug ? `<h4>اقتراحات</h4><ul class="sug-list">${sug}</ul>` : "");
 }
-async function runGenerate(seed) {
-  $("autoGenResult").textContent = "جاري التوليد...";
+async function runGenerate(seed, allowPartial) {
+  $("autoGenResult").textContent = "جاري البحث عن توزيع مكتمل 100%... (قد يستغرق بضع ثوانٍ)";
   try {
-    const r = await post("/api/schedule/auto-generate", seed ? { seed } : {});
+    const r = await post("/api/schedule/auto-generate", { ...(seed ? { seed } : {}), ...(allowPartial ? { allowPartial: true } : {}) });
+    if (r.applied === false) {
+      $("autoGenResult").innerHTML = `❌ ${esc(r.message)} <button class="btn btn-ghost" onclick="runGenerate(null, true)">طبّق أفضل نتيجة ناقصة على كل حال</button>`;
+      renderGenPanel(r);
+      return;
+    }
     $("autoGenResult").textContent = `تم جدولة ${r.filled} من ${r.required} حصة — الدرجة ${r.score}/100` + (r.unfilled ? ` — بقي ${r.unfilled} ناقصة` : " ✅")
       + (r.diffPercent < 100 ? ` — اختلف ${r.diffPercent}% عن الجدول السابق` : "") + (r.keptManual ? ` — حُفظت ${r.keptManual} حصة مثبّتة 📌` : "");
     renderGenPanel(r);

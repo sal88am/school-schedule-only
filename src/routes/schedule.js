@@ -452,14 +452,45 @@ router.post("/auto-generate", requireDraft, (req, res) => {
   db.prepare("SELECT * FROM schedule WHERE school_id=?").all(sid).forEach((r) => (prev[`${r.class_id}-${r.day_of_week}-${r.period_number}`] = r.subject_id));
 
   const wanted = req.body && Number(req.body.seed);
+  const allowPartial = !!(req.body && req.body.allowPartial);
   const base = (Date.now() % 1000000) + 1;
-  const seeds = wanted ? [wanted] : Array.from({ length: 8 }, (_, i) => base + i * 7919);
-  const cands = seeds.map((seed) => {
-    const r = generate({ ...input.base, seed });
-    return { seed, r, diff: diffPercent(prev, r.signature) };
-  });
-  cands.sort((x, y) => y.r.score - x.r.score || y.diff - x.diff || x.r.softViolations - y.r.softViolations);
-  const best = cands[0];
+  const isFull = (r) => r.filled === r.required;
+  const cands = [];
+  let attempts = 0, bestPartial = null;
+  if (wanted) {
+    const r = generate({ ...input.base, seed: wanted });
+    attempts = 1;
+    cands.push({ seed: wanted, r, diff: diffPercent(prev, r.signature) });
+  } else {
+    // يجرّب توزيعات كثيرة ولا يقبل إلا الجداول المكتملة 100% (بدون حصص ناقصة)
+    const t0 = Date.now(), seen = new Set();
+    while (attempts < 150 && cands.length < 10 && Date.now() - t0 < 5000) {
+      const seed = base + attempts * 7919; attempts++;
+      const r = generate({ ...input.base, seed });
+      if (isFull(r)) {
+        const sig = JSON.stringify(Object.entries(r.signature).sort());
+        if (seen.has(sig)) continue;
+        seen.add(sig);
+        cands.push({ seed, r, diff: diffPercent(prev, r.signature) });
+      } else if (!bestPartial || r.filled > bestPartial.r.filled) bestPartial = { seed, r, diff: diffPercent(prev, r.signature) };
+    }
+  }
+  const full = cands.filter((c) => isFull(c.r));
+  full.sort((x, y) => y.r.score - x.r.score || y.diff - x.diff || x.r.softViolations - y.r.softViolations);
+
+  // لا يوجد جدول مكتمل: لا نستبدل الجدول الحالي، ونشرح السبب
+  if (!full.length && !allowPartial) {
+    const worst = bestPartial || cands.sort((x, y) => y.r.filled - x.r.filled)[0];
+    return res.json({
+      applied: false, attempts,
+      filled: worst.r.filled, required: worst.r.required, unfilled: worst.r.required - worst.r.filled,
+      score: worst.r.score, softViolations: worst.r.softViolations, seed: worst.seed, alternatives: [], keptManual: 0,
+      suggestions: buildSuggestions(sid, worst.r, input),
+      message: `لم أجد توزيعاً مكتملاً 100% بعد ${attempts} محاولة — الجدول الحالي لم يتغيّر. أفضل نتيجة: ${worst.r.filled} من ${worst.r.required} حصة. طبّق الحلول المقترحة ثم أعد التوليد.`,
+    });
+  }
+  const best = full[0] || (bestPartial || cands[0]);
+  const alts = full.filter((c) => c !== best).slice(0, 3);
 
   const keptManual = input.base.fixed.filter((f) => f.lock_kind === "manual").length;
   db.transaction(() => {
@@ -467,12 +498,13 @@ router.post("/auto-generate", requireDraft, (req, res) => {
     const ins = db.prepare("INSERT INTO schedule (school_id, teacher_id, class_id, subject_id, day_of_week, period_number, lock_kind) VALUES (?,?,?,?,?,?,?)");
     best.r.placements.forEach((p) => ins.run(sid, p.teacher_id, p.class_id, p.subject_id, p.day_of_week, p.period_number, p.lock_kind || null));
   })();
-  audit(sid, "schedule_generated", { filled: best.r.filled, required: best.r.required, score: best.r.score, seed: best.seed });
+  audit(sid, "schedule_generated", { filled: best.r.filled, required: best.r.required, score: best.r.score, seed: best.seed, attempts });
 
   res.json({
+    applied: true, attempts,
     filled: best.r.filled, required: best.r.required, unfilled: best.r.required - best.r.filled,
     score: best.r.score, softViolations: best.r.softViolations, seed: best.seed, diffPercent: best.diff, keptManual,
-    alternatives: cands.slice(1, 4).map((c) => ({ seed: c.seed, score: c.r.score, filled: c.r.filled, unfilled: c.r.required - c.r.filled, softViolations: c.r.softViolations, diffPercent: c.diff })),
+    alternatives: alts.map((c) => ({ seed: c.seed, score: c.r.score, filled: c.r.filled, unfilled: c.r.required - c.r.filled, softViolations: c.r.softViolations, diffPercent: c.diff })),
     suggestions: buildSuggestions(sid, best.r, input),
     report: buildValidationReport(sid),
   });
